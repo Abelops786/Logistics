@@ -3,6 +3,7 @@ import { useRouter, usePathname } from 'next/navigation';
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/dashboard/reports', label: 'Reports' },
   { href: '/dashboard/agents', label: 'Agents' },
   { href: '/dashboard/trips', label: 'Trips' },
   { href: '/dashboard/pricing', label: 'Pricing' },

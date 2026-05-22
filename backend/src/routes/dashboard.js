@@ -108,4 +108,116 @@ router.get('/metrics', authenticate, requireRole('admin', 'super_admin'), async 
   }
 });
 
+// GET /api/dashboard/reports?month=YYYY-MM
+router.get('/reports', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
+  const isSuperAdmin = req.user.role === 'super_admin';
+  const paymentFilter = isSuperAdmin ? '' : "AND payment_type = 'bank'";
+  const approvedCond = isSuperAdmin
+    ? "status IN ('approved','completed')"
+    : "status IN ('approved','completed') AND payment_type = 'bank'";
+
+  // Accept ?month=2026-05 or default to current month
+  const monthParam = req.query.month;
+  let targetDate;
+  if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+    targetDate = new Date(`${monthParam}-01`);
+  } else {
+    targetDate = new Date();
+    targetDate.setDate(1);
+  }
+  const thisMonthStart = targetDate.toISOString().slice(0, 10);
+  const nextMonthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1).toISOString().slice(0, 10);
+  const lastMonthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1).toISOString().slice(0, 10);
+
+  try {
+    const [thisMonth, lastMonth, byAgent, byContainer, tripsList, allMonths] = await Promise.all([
+
+      // This month income + trip count
+      pool.query(`
+        SELECT
+          COALESCE(SUM(admin_final_price), 0) AS revenue,
+          COUNT(*) AS trips
+        FROM trips
+        WHERE ${approvedCond}
+          AND created_at >= $1 AND created_at < $2
+      `, [thisMonthStart, nextMonthStart]),
+
+      // Last month income + trip count
+      pool.query(`
+        SELECT
+          COALESCE(SUM(admin_final_price), 0) AS revenue,
+          COUNT(*) AS trips
+        FROM trips
+        WHERE ${approvedCond}
+          AND created_at >= $1 AND created_at < $2
+      `, [lastMonthStart, thisMonthStart]),
+
+      // Income by agent this month
+      pool.query(`
+        SELECT u.name, u.phone,
+               COUNT(t.id) AS trips,
+               COALESCE(SUM(t.admin_final_price), 0) AS revenue
+        FROM trips t
+        JOIN users u ON u.id = t.agent_id
+        WHERE ${approvedCond.replace(/\b(status|payment_type)\b/g, 't.$1')}
+          AND t.created_at >= $1 AND t.created_at < $2
+        GROUP BY u.id, u.name, u.phone
+        ORDER BY revenue DESC
+      `, [thisMonthStart, nextMonthStart]),
+
+      // Income by container type this month
+      pool.query(`
+        SELECT container_type,
+               COUNT(*) AS trips,
+               COALESCE(SUM(admin_final_price), 0) AS revenue
+        FROM trips
+        WHERE ${approvedCond}
+          AND created_at >= $1 AND created_at < $2
+        GROUP BY container_type
+      `, [thisMonthStart, nextMonthStart]),
+
+      // All trips this month (full details)
+      pool.query(`
+        SELECT t.id, t.pickup_location, t.dropoff_locations,
+               t.container_type, t.admin_final_price, t.status,
+               t.created_at, u.name AS agent_name, u.phone AS agent_phone,
+               v.plate_number, d.name AS driver_name
+        FROM trips t
+        LEFT JOIN users u ON u.id = t.agent_id
+        LEFT JOIN vehicles v ON v.id = t.vehicle_id
+        LEFT JOIN drivers d ON d.id = t.driver_id
+        WHERE 1=1 ${paymentFilter.replace('AND payment_type', 'AND t.payment_type')}
+          AND t.created_at >= $1 AND t.created_at < $2
+        ORDER BY t.created_at DESC
+      `, [thisMonthStart, nextMonthStart]),
+
+      // All months available (for month picker)
+      pool.query(`
+        SELECT DISTINCT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month
+        FROM trips
+        ORDER BY month DESC
+        LIMIT 24
+      `),
+    ]);
+
+    const thisRev = parseFloat(thisMonth.rows[0].revenue);
+    const lastRev = parseFloat(lastMonth.rows[0].revenue);
+    const growth = lastRev > 0 ? ((thisRev - lastRev) / lastRev * 100).toFixed(1) : null;
+
+    res.json({
+      selected_month: monthParam || new Date().toISOString().slice(0, 7),
+      this_month: { revenue: thisRev, trips: parseInt(thisMonth.rows[0].trips) },
+      last_month: { revenue: lastRev, trips: parseInt(lastMonth.rows[0].trips) },
+      growth_pct: growth,
+      by_agent: byAgent.rows,
+      by_container: byContainer.rows,
+      trips: tripsList.rows,
+      available_months: allMonths.rows.map((r) => r.month),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;
