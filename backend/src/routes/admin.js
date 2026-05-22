@@ -43,6 +43,107 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/agents/:id/profile — full agent profile with revenue & trip history
+router.get('/agents/:id/profile', ...isAdmin, async (req, res) => {
+  const isSuperAdmin = req.user.role === 'super_admin';
+  const paymentFilter = isSuperAdmin ? '' : "AND t.payment_type = 'bank'";
+  const agentId = req.params.id;
+
+  // Period filter
+  const period = req.query.period || 'month';
+  const customFrom = req.query.from;
+  const customTo = req.query.to;
+
+  let periodStart, periodEnd;
+  const now = new Date();
+
+  if (period === 'today') {
+    periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    periodEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+  } else if (period === 'yesterday') {
+    periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toISOString();
+    periodEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  } else if (period === 'week') {
+    periodStart = new Date(now.getTime() - 7 * 86400000).toISOString();
+    periodEnd = new Date(now.getTime() + 86400000).toISOString();
+  } else if (period === 'custom' && customFrom && customTo) {
+    periodStart = new Date(customFrom).toISOString();
+    periodEnd = new Date(new Date(customTo).getTime() + 86400000).toISOString();
+  } else {
+    // month (default)
+    periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+  }
+
+  try {
+    const [agentRow, statsRow, revenueRow, trips] = await Promise.all([
+      pool.query(
+        "SELECT id, name, phone, cnic, region, status, cnic_front_base64, cnic_back_base64, created_at FROM users WHERE id = $1 AND role = 'agent'",
+        [agentId]
+      ),
+
+      // All-time counts
+      pool.query(
+        `SELECT
+           COUNT(*) AS total_requests,
+           COUNT(*) FILTER (WHERE status IN ('approved','completed')) AS approved,
+           COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
+           COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+           COUNT(*) FILTER (WHERE status = 'quoted') AS quoted,
+           COALESCE(SUM(admin_final_price + COALESCE(detention_penalty,0)) FILTER (WHERE status IN ('approved','completed')), 0) AS total_revenue_alltime
+         FROM trips t WHERE agent_id = $1 ${paymentFilter}`,
+        [agentId]
+      ),
+
+      // Revenue for selected period
+      pool.query(
+        `SELECT
+           COALESCE(SUM(admin_final_price + COALESCE(detention_penalty,0)), 0) AS period_revenue,
+           COUNT(*) AS period_trips
+         FROM trips t
+         WHERE agent_id = $1 ${paymentFilter}
+           AND status IN ('approved','completed')
+           AND created_at >= $2 AND created_at < $3`,
+        [agentId, periodStart, periodEnd]
+      ),
+
+      // Full trip history
+      pool.query(
+        `SELECT t.id, t.pickup_location, t.dropoff_locations, t.container_type,
+                t.system_estimated_price, t.agent_requested_price, t.admin_final_price,
+                t.detention_penalty, t.total_amount, t.payment_type,
+                t.status, t.created_at, t.completion_notes, t.not_complete_reason,
+                v.plate_number, d.name AS driver_name, d.phone AS driver_phone
+         FROM trips t
+         LEFT JOIN vehicles v ON v.id = t.vehicle_id
+         LEFT JOIN drivers d ON d.id = t.driver_id
+         WHERE t.agent_id = $1 ${paymentFilter.replace('AND t.', 'AND t.')}
+         ORDER BY t.created_at DESC`,
+        [agentId]
+      ),
+    ]);
+
+    if (!agentRow.rows.length) return res.status(404).json({ message: 'Agent not found' });
+
+    const agent = agentRow.rows[0];
+    if (agent.role === 'admin') delete agent.cnic_front_base64; // safety
+
+    res.json({
+      agent,
+      stats: statsRow.rows[0],
+      period_revenue: parseFloat(revenueRow.rows[0].period_revenue),
+      period_trips: parseInt(revenueRow.rows[0].period_trips),
+      period,
+      trips: isSuperAdmin
+        ? trips.rows
+        : trips.rows.map((t) => { const s = { ...t }; delete s.payment_type; return s; }),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /api/admin/agents — all agents list
 router.get('/agents', ...isAdmin, async (req, res) => {
   try {

@@ -195,7 +195,11 @@ export default function AgentsPage() {
             <tbody>
               {agents.map((agent) => (
                 <tr key={agent.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{agent.name}</td>
+                  <td className="px-4 py-3">
+                    <a href={`/dashboard/agents/${agent.id}`} className="font-medium text-blue-600 hover:underline">
+                      {agent.name}
+                    </a>
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{agent.phone}</td>
                   <td className="px-4 py-3 text-gray-600">{agent.cnic}</td>
                   <td className="px-4 py-3 text-gray-600">{agent.region || '—'}</td>
