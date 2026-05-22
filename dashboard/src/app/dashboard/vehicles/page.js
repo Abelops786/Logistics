@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
+import { exportCSV } from '../../../lib/exportCsv';
 
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState([]);
@@ -44,7 +45,16 @@ export default function VehiclesPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Vehicles</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Vehicles</h1>
+        <button
+          onClick={() => exportCSV(vehicles.map((v) => ({
+            Plate: v.plate_number, Type: v.container_type, Rate_Per_KM: v.rate_per_km,
+            Driver: v.driver_name || '', Driver_Phone: v.driver_phone || '', Driver_Status: v.driver_status || '',
+          })), 'abel_vehicles')}
+          className="px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700"
+        >↓ Export CSV</button>
+      </div>
 
       <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-6">
         <h2 className="font-medium text-gray-700 mb-4">Add New Vehicle</h2>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
+import { exportCSV } from '../../../lib/exportCsv';
 
 const STATUS_COLORS = { available: 'text-green-600', on_trip: 'text-blue-600', offline: 'text-gray-400' };
 
@@ -49,7 +50,15 @@ export default function DriversPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Drivers</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Drivers</h1>
+        <button
+          onClick={() => exportCSV(drivers.map((d) => ({
+            Name: d.name, Phone: d.phone, Status: d.status, Assigned_Vehicle: d.assigned_vehicle || '',
+          })), 'abel_drivers')}
+          className="px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700"
+        >↓ Export CSV</button>
+      </div>
 
       <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-6">
         <h2 className="font-medium text-gray-700 mb-4">Add New Driver</h2>
