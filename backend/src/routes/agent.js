@@ -22,7 +22,7 @@ router.get('/ledger', authenticate, requireRole('agent'), async (req, res) => {
     const trips = await pool.query(
       `SELECT t.id, t.pickup_location, t.dropoff_locations, t.container_type,
               t.system_estimated_price, t.agent_requested_price, t.admin_final_price,
-              t.status, t.agent_repriced, t.created_at,
+              t.payment_type, t.status, t.agent_repriced, t.created_at,
               v.plate_number, d.name AS driver_name, d.phone AS driver_phone
        FROM trips t
        LEFT JOIN vehicles v ON v.id = t.vehicle_id

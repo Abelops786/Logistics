@@ -157,6 +157,26 @@ class _LedgerScreenState extends State<LedgerScreen> {
                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ),
+            if (trip.paymentType != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(children: [
+                  Icon(
+                    trip.paymentType == 'bank' ? Icons.account_balance : Icons.money,
+                    size: 13,
+                    color: trip.paymentType == 'bank' ? Colors.blue.shade600 : Colors.green.shade700,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    trip.paymentType == 'bank' ? 'Bank Transfer' : 'Cash',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: trip.paymentType == 'bank' ? Colors.blue.shade600 : Colors.green.shade700,
+                    ),
+                  ),
+                ]),
+              ),
           ],
 
           // PENDING with counter offer
@@ -377,15 +397,21 @@ class _TripDetailSheet extends StatelessWidget {
                 _row('Your Offer', 'Rs. ${trip.agentRequestedPrice!.toStringAsFixed(0)}', valueColor: Colors.orange),
               if (trip.adminFinalPrice != null)
                 _row('Admin Final Price', 'Rs. ${trip.adminFinalPrice!.toStringAsFixed(0)}', valueColor: color),
-              if (trip.plateNumber != null) ...[
+              if (trip.plateNumber != null || trip.paymentType != null) ...[
                 const SizedBox(height: 14),
                 const Divider(),
                 const SizedBox(height: 8),
                 const Text('Assignment', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
                 const SizedBox(height: 6),
-                _row('Vehicle', trip.plateNumber!),
+                if (trip.plateNumber != null) _row('Vehicle', trip.plateNumber!),
                 if (trip.driverName != null) _row('Driver', trip.driverName!),
                 if (trip.driverPhone != null) _row('Driver Phone', trip.driverPhone!),
+                if (trip.paymentType != null)
+                  _row(
+                    'Payment Method',
+                    trip.paymentType == 'bank' ? 'Bank Transfer' : 'Cash',
+                    valueColor: trip.paymentType == 'bank' ? Colors.blue.shade600 : Colors.green.shade700,
+                  ),
               ],
             ]),
           ),
