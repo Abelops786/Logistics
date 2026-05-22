@@ -1,41 +1,89 @@
-// Notification engine — interface layer.
-// Variables stored as positional array for Meta Cloud API future swap.
-// Currently mapped to Whapi.cloud/Green API payload.
+// Notification engine — Meta WhatsApp Cloud API v25.0
+// Positional variables: [AgentName, Route, Price, PlateNumber, DriverName]
+// Same vars map to Meta template {{1}}, {{2}}, {{3}}, {{4}}, {{5}}
 const axios = require('axios');
 
-const GATEWAY_URL = process.env.WHATSAPP_GATEWAY_URL;
-const TOKEN = process.env.WHATSAPP_TOKEN;
+const META_TOKEN = process.env.WHATSAPP_TOKEN;
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_ID;
+const API_VERSION = 'v25.0';
+const META_URL = `https://graph.facebook.com/${API_VERSION}/${PHONE_NUMBER_ID}/messages`;
 
 async function sendWhatsApp(toPhone, variables) {
-  // variables: [AgentName, Route, Price, PlateNumber, DriverName]
-  // Compose message from positional params so it's trivial to swap to Meta template {{1}},{{2}}...
   const [agentName, route, price, plateNumber, driverName] = variables;
 
-  let message;
-  if (plateNumber && driverName) {
-    // Trigger 2: Trip approval → agent
-    message = `*Abel Logistics*\nTrip Approved!\nVehicle: ${plateNumber}\nDriver: ${driverName}\nFinal Price: PKR ${price}`;
-  } else if (route && route.includes('approved')) {
-    // Agent account approved
-    message = `*Abel Logistics*\n${route}`;
-  } else {
-    // Trigger 1: New booking → admin
-    message = `*Abel Logistics*\nNew trip request from Agent *${agentName}*.\nRoute: ${route}`;
-  }
-
-  if (!GATEWAY_URL || !TOKEN) {
-    console.log('[WhatsApp Stub]', toPhone, message);
+  if (!META_TOKEN || !PHONE_NUMBER_ID) {
+    console.log('[WhatsApp Stub]', toPhone, variables);
     return;
   }
 
+  // Clean phone number — Meta requires international format without +
+  const cleanPhone = toPhone.replace(/\D/g, '');
+
+  let body;
+
+  if (plateNumber && driverName && price) {
+    // Trigger 2: Trip approved → agent
+    body = {
+      messaging_product: 'whatsapp',
+      to: cleanPhone,
+      type: 'text',
+      text: {
+        body: `*Abel Logistics* ✅\n\nTrip Approved!\n\n🚛 Vehicle: ${plateNumber}\n👤 Driver: ${driverName}\n💰 Final Price: PKR ${Number(price).toLocaleString()}\n\nRoute: ${route}`,
+      },
+    };
+  } else if (route && route.includes('approved')) {
+    // Account approved notification
+    body = {
+      messaging_product: 'whatsapp',
+      to: cleanPhone,
+      type: 'text',
+      text: {
+        body: `*Abel Logistics* ✅\n\nYour agent account has been approved! You can now log in and submit trip requests.`,
+      },
+    };
+  } else {
+    // Trigger 1: New booking request → admin
+    body = {
+      messaging_product: 'whatsapp',
+      to: cleanPhone,
+      type: 'text',
+      text: {
+        body: `*Abel Logistics* 🚛\n\nNew trip request from Agent *${agentName}*\n\nRoute: ${route}`,
+      },
+    };
+  }
+
   try {
-    await axios.post(
-      `${GATEWAY_URL}/messages`,
-      { to: toPhone, body: message },
-      { headers: { Authorization: `Bearer ${TOKEN}` } }
-    );
+    const res = await axios.post(META_URL, body, {
+      headers: {
+        Authorization: `Bearer ${META_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    console.log('WhatsApp sent:', res.data?.messages?.[0]?.id);
   } catch (err) {
-    console.error('WhatsApp send failed:', err.message);
+    const errData = err.response?.data?.error;
+    console.error('WhatsApp send failed:', errData?.message || err.message);
+  }
+}
+
+// Quoted price notification (separate trigger)
+async function sendQuotedNotification(toPhone, agentName, route, price) {
+  if (!META_TOKEN || !PHONE_NUMBER_ID) return;
+  const cleanPhone = toPhone.replace(/\D/g, '');
+  try {
+    await axios.post(META_URL, {
+      messaging_product: 'whatsapp',
+      to: cleanPhone,
+      type: 'text',
+      text: {
+        body: `*Abel Logistics* ⏳\n\nAdmin has quoted a price for your trip.\n\nRoute: ${route}\n💰 Quoted Price: PKR ${Number(price).toLocaleString()}\n\nPlease open the Abel Logistics app to Accept, Reject, or Re-Price.`,
+      },
+    }, {
+      headers: { Authorization: `Bearer ${META_TOKEN}`, 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    console.error('WhatsApp quoted notification failed:', err.response?.data?.error?.message || err.message);
   }
 }
 
@@ -46,8 +94,7 @@ async function sendEmail(to, subject, html) {
     return;
   }
   try {
-    await axios.post(
-      'https://api.resend.com/emails',
+    await axios.post('https://api.resend.com/emails',
       { from: process.env.EMAIL_FROM, to, subject, html },
       { headers: { Authorization: `Bearer ${RESEND_KEY}` } }
     );
@@ -56,4 +103,4 @@ async function sendEmail(to, subject, html) {
   }
 }
 
-module.exports = { sendWhatsApp, sendEmail };
+module.exports = { sendWhatsApp, sendQuotedNotification, sendEmail };

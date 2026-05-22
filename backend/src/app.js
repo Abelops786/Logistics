@@ -7,6 +7,7 @@ const tripsRoutes = require('./routes/trips');
 const agentRoutes = require('./routes/agent');
 const adminRoutes = require('./routes/admin');
 const dashboardRoutes = require('./routes/dashboard');
+const webhookRoutes = require('./routes/webhook');
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.use('/api/trips', tripsRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/webhook', webhookRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

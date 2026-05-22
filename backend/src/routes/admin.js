@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { buildTripWhereClause, stripCashFieldsArray } = require('../middleware/tripFilter');
-const { sendWhatsApp } = require('../services/notificationService');
+const { sendWhatsApp, sendQuotedNotification } = require('../services/notificationService');
 const { notify } = require('../services/notifyAgent');
 
 const router = express.Router();
@@ -275,7 +275,7 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
       const driverName = driverRow.rows[0]?.name || '';
 
       if (newStatus === 'quoted') {
-        await sendWhatsApp(agentRow.rows[0].phone, [agentRow.rows[0].name, route, String(final_price), plate, driverName]);
+        await sendQuotedNotification(agentRow.rows[0].phone, agentRow.rows[0].name, route, final_price);
         await notify(trip.agent_id,
           'Admin Quoted a Price',
           `Rs. ${Number(final_price).toLocaleString()} for your trip: ${route}. Please Accept or Reject.`,
