@@ -8,6 +8,8 @@ class Trip {
   final double? adminFinalPrice;
   final String status;
   final String createdAt;
+  final String? plateNumber;
+  final String? driverName;
 
   Trip({
     required this.id,
@@ -19,6 +21,8 @@ class Trip {
     this.adminFinalPrice,
     required this.status,
     required this.createdAt,
+    this.plateNumber,
+    this.driverName,
   });
 
   factory Trip.fromJson(Map<String, dynamic> j) {
@@ -39,6 +43,8 @@ class Trip {
       adminFinalPrice: j['admin_final_price'] != null ? double.tryParse(j['admin_final_price'].toString()) : null,
       status: j['status'],
       createdAt: j['created_at'],
+      plateNumber: j['plate_number'],
+      driverName: j['driver_name'],
     );
   }
 

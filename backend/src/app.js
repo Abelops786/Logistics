@@ -11,7 +11,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); // 10mb for base64 CNIC images
+app.use(express.json({ limit: '20mb' })); // 20mb for base64 images (CNIC + driver photos)
 
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripsRoutes);

@@ -5,14 +5,16 @@ import api from '../../../lib/api';
 
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [form, setForm] = useState({ plate_number: '', container_type: '50ft_22_wheeler', rate_per_km: '' });
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
 
   async function load() {
     try {
-      const { data } = await api.get('/api/admin/vehicles');
-      setVehicles(data.filter(v => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number)));
+      const [vRes, dRes] = await Promise.all([api.get('/api/admin/vehicles'), api.get('/api/admin/drivers')]);
+      setVehicles(vRes.data.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number)));
+      setDrivers(dRes.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }
@@ -31,39 +33,33 @@ export default function VehiclesPage() {
     } finally { setAdding(false); }
   }
 
+  async function assignDriver(vehicleId, driverId) {
+    try {
+      await api.put(`/api/admin/vehicles/${vehicleId}/assign-driver`, { driver_id: driverId || null });
+      load();
+    } catch (err) {
+      alert('Failed to assign driver');
+    }
+  }
+
   return (
     <Layout>
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Vehicles</h1>
+
       <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 mb-6">
         <h2 className="font-medium text-gray-700 mb-4">Add New Vehicle</h2>
         <form onSubmit={addVehicle} className="flex gap-3 flex-wrap">
-          <input
-            value={form.plate_number}
-            onChange={(e) => setForm({ ...form, plate_number: e.target.value })}
-            placeholder="Plate Number"
-            className="border border-gray-300 rounded px-3 py-2 text-sm"
-            required
-          />
-          <select
-            value={form.container_type}
-            onChange={(e) => setForm({ ...form, container_type: e.target.value })}
-            className="border border-gray-300 rounded px-3 py-2 text-sm"
-          >
+          <input value={form.plate_number} onChange={(e) => setForm({ ...form, plate_number: e.target.value })}
+            placeholder="Plate Number" className="border border-gray-300 rounded px-3 py-2 text-sm" required />
+          <select value={form.container_type} onChange={(e) => setForm({ ...form, container_type: e.target.value })}
+            className="border border-gray-300 rounded px-3 py-2 text-sm">
             <option value="50ft_22_wheeler">50ft 22-Wheeler</option>
             <option value="47ft_22_wheeler_jumbo">47ft Jumbo</option>
           </select>
-          <input
-            value={form.rate_per_km}
-            onChange={(e) => setForm({ ...form, rate_per_km: e.target.value })}
-            placeholder="Rate/KM (PKR)"
-            type="number"
-            className="border border-gray-300 rounded px-3 py-2 text-sm w-36"
-          />
-          <button
-            type="submit"
-            disabled={adding}
-            className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
+          <input value={form.rate_per_km} onChange={(e) => setForm({ ...form, rate_per_km: e.target.value })}
+            placeholder="Rate/KM (PKR)" type="number" className="border border-gray-300 rounded px-3 py-2 text-sm w-36" />
+          <button type="submit" disabled={adding}
+            className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
             {adding ? 'Adding...' : 'Add Vehicle'}
           </button>
         </form>
@@ -77,14 +73,44 @@ export default function VehiclesPage() {
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Plate</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Type</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Rate/KM</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-medium">Assigned Driver</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-medium">Assign Driver</th>
               </tr>
             </thead>
             <tbody>
               {vehicles.map((v) => (
-                <tr key={v.id} className="border-b border-gray-100">
+                <tr key={v.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">{v.plate_number}</td>
                   <td className="px-4 py-3 text-gray-600">{v.container_type.replace(/_/g, ' ')}</td>
                   <td className="px-4 py-3 text-gray-600">Rs. {v.rate_per_km}</td>
+                  <td className="px-4 py-3">
+                    {v.driver_photo ? (
+                      <div className="flex items-center gap-2">
+                        <img src={v.driver_photo} alt={v.driver_name} className="w-8 h-8 rounded-full object-cover border" />
+                        <div>
+                          <p className="font-medium text-gray-800 text-xs">{v.driver_name}</p>
+                          <p className="text-gray-400 text-xs">{v.driver_phone}</p>
+                        </div>
+                      </div>
+                    ) : v.driver_name ? (
+                      <div>
+                        <p className="font-medium text-gray-800 text-xs">{v.driver_name}</p>
+                        <p className="text-gray-400 text-xs">{v.driver_phone}</p>
+                      </div>
+                    ) : <span className="text-gray-400 text-xs">None assigned</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={v.assigned_driver_id || ''}
+                      onChange={(e) => assignDriver(v.id, e.target.value)}
+                      className="border border-gray-300 rounded px-2 py-1 text-xs"
+                    >
+                      <option value="">— Unassign —</option>
+                      {drivers.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name} ({d.status})</option>
+                      ))}
+                    </select>
+                  </td>
                 </tr>
               ))}
             </tbody>

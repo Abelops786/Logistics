@@ -46,9 +46,41 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
 router.get('/agents', ...isAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT id, name, cnic, phone, region, status, created_at FROM users WHERE role = 'agent' ORDER BY created_at DESC"
+      "SELECT id, name, cnic, phone, region, status, cnic_front_base64, cnic_back_base64, created_at FROM users WHERE role = 'agent' ORDER BY created_at DESC"
     );
     res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/admin/agents/:id — edit agent details + password
+router.put('/agents/:id', ...isAdmin, async (req, res) => {
+  const { name, phone, region, cnic, new_password, cnic_front_base64, cnic_back_base64 } = req.body;
+  try {
+    let passwordHash = null;
+    if (new_password && new_password.length >= 6) {
+      const bcrypt = require('bcryptjs');
+      passwordHash = await bcrypt.hash(new_password, 10);
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE users SET
+         name = COALESCE($1, name),
+         phone = COALESCE($2, phone),
+         region = COALESCE($3, region),
+         cnic = COALESCE($4, cnic),
+         password_hash = COALESCE($5, password_hash),
+         cnic_front_base64 = COALESCE($6, cnic_front_base64),
+         cnic_back_base64 = COALESCE($7, cnic_back_base64),
+         updated_at = NOW()
+       WHERE id = $8
+       RETURNING id, name, phone, region, cnic, status`,
+      [name || null, phone || null, region || null, cnic || null, passwordHash, cnic_front_base64 || null, cnic_back_base64 || null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Agent not found' });
+    res.json({ message: 'Agent updated', agent: rows[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -58,7 +90,12 @@ router.get('/agents', ...isAdmin, async (req, res) => {
 // GET /api/admin/drivers
 router.get('/drivers', ...isAdmin, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM drivers ORDER BY name ASC");
+    const { rows } = await pool.query(`
+      SELECT d.*, v.plate_number AS assigned_vehicle
+      FROM drivers d
+      LEFT JOIN vehicles v ON v.assigned_driver_id = d.id
+      ORDER BY d.name ASC
+    `);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -67,14 +104,35 @@ router.get('/drivers', ...isAdmin, async (req, res) => {
 
 // POST /api/admin/drivers
 router.post('/drivers', ...isAdmin, async (req, res) => {
-  const { name, phone } = req.body;
+  const { name, phone, photo_base64 } = req.body;
   if (!name || !phone) return res.status(400).json({ message: 'name and phone are required' });
   try {
     const { rows } = await pool.query(
-      "INSERT INTO drivers (name, phone) VALUES ($1, $2) RETURNING *",
-      [name, phone]
+      "INSERT INTO drivers (name, phone, photo_base64) VALUES ($1, $2, $3) RETURNING *",
+      [name, phone, photo_base64 || null]
     );
     res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/admin/drivers/:id
+router.put('/drivers/:id', ...isAdmin, async (req, res) => {
+  const { name, phone, status, photo_base64 } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE drivers SET
+         name = COALESCE($1, name),
+         phone = COALESCE($2, phone),
+         status = COALESCE($3, status),
+         photo_base64 = COALESCE($4, photo_base64),
+         updated_at = NOW()
+       WHERE id = $5 RETURNING *`,
+      [name || null, phone || null, status || null, photo_base64 || null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Driver not found' });
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -83,8 +141,28 @@ router.post('/drivers', ...isAdmin, async (req, res) => {
 // GET /api/admin/vehicles
 router.get('/vehicles', ...isAdmin, async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT * FROM vehicles ORDER BY plate_number ASC");
+    const { rows } = await pool.query(`
+      SELECT v.*, d.name AS driver_name, d.phone AS driver_phone, d.status AS driver_status, d.photo_base64 AS driver_photo
+      FROM vehicles v
+      LEFT JOIN drivers d ON d.id = v.assigned_driver_id
+      ORDER BY v.plate_number ASC
+    `);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/admin/vehicles/:id/assign-driver
+router.put('/vehicles/:id/assign-driver', ...isAdmin, async (req, res) => {
+  const { driver_id } = req.body;
+  try {
+    const { rows } = await pool.query(
+      "UPDATE vehicles SET assigned_driver_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+      [driver_id || null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Vehicle not found' });
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -154,19 +232,22 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
   }
 
   try {
+    // If agent submitted a counter offer, set status to 'quoted' — agent must confirm
+    const tripCheck = await pool.query('SELECT agent_requested_price FROM trips WHERE id = $1', [req.params.id]);
+    const hasCounterOffer = tripCheck.rows[0]?.agent_requested_price != null;
+    const newStatus = hasCounterOffer ? 'quoted' : 'approved';
+
     const { rows } = await pool.query(
       `UPDATE trips
        SET admin_final_price = $1, vehicle_id = $2, driver_id = $3, payment_type = $4,
-           status = 'approved', updated_at = NOW()
-       WHERE id = $5
+           status = $5, updated_at = NOW()
+       WHERE id = $6
        RETURNING *`,
-      [final_price, vehicle_id, driver_id, payment_type, req.params.id]
+      [final_price, vehicle_id, driver_id, payment_type, newStatus, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Trip not found' });
 
     const trip = rows[0];
-
-    // Fetch agent & vehicle/driver info for notification
     const [agentRow, vehicleRow, driverRow] = await Promise.all([
       pool.query('SELECT name, phone FROM users WHERE id = $1', [trip.agent_id]),
       pool.query('SELECT plate_number FROM vehicles WHERE id = $1', [vehicle_id]),
@@ -181,13 +262,15 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
       const plate = vehicleRow.rows[0]?.plate_number || '';
       const driverName = driverRow.rows[0]?.name || '';
 
-      await sendWhatsApp(
-        agentRow.rows[0].phone,
-        [agentRow.rows[0].name, route, String(final_price), plate, driverName]
-      );
+      if (newStatus === 'quoted') {
+        // Notify agent: admin has quoted a price, needs confirmation
+        await sendWhatsApp(agentRow.rows[0].phone, [agentRow.rows[0].name, route, String(final_price), plate, driverName]);
+      } else {
+        await sendWhatsApp(agentRow.rows[0].phone, [agentRow.rows[0].name, route, String(final_price), plate, driverName]);
+      }
     }
 
-    res.json({ message: 'Trip approved and assigned', trip });
+    res.json({ message: newStatus === 'quoted' ? 'Price quoted, awaiting agent confirmation' : 'Trip approved', trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
