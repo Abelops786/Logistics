@@ -288,4 +288,21 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/trips/:id/complete
+router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE trips SET status = 'completed', updated_at = NOW()
+       WHERE id = $1 AND status = 'approved'
+       RETURNING *`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(400).json({ message: 'Trip not found or not in approved status' });
+    res.json({ message: 'Trip marked as completed', trip: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

@@ -108,7 +108,7 @@ router.get('/metrics', authenticate, requireRole('admin', 'super_admin'), async 
   }
 });
 
-// GET /api/dashboard/reports?month=YYYY-MM
+// GET /api/dashboard/reports?month=YYYY-MM OR ?from=YYYY-MM-DD&to=YYYY-MM-DD
 router.get('/reports', authenticate, requireRole('admin', 'super_admin'), async (req, res) => {
   const isSuperAdmin = req.user.role === 'super_admin';
   const paymentFilter = isSuperAdmin ? '' : "AND payment_type = 'bank'";
@@ -116,18 +116,36 @@ router.get('/reports', authenticate, requireRole('admin', 'super_admin'), async 
     ? "status IN ('approved','completed')"
     : "status IN ('approved','completed') AND payment_type = 'bank'";
 
-  // Accept ?month=2026-05 or default to current month
-  const monthParam = req.query.month;
-  let targetDate;
-  if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
-    targetDate = new Date(`${monthParam}-01`);
+  let thisMonthStart, nextMonthStart, lastMonthStart, rangeLabel;
+
+  // Custom date range: ?from=2026-05-01&to=2026-05-07
+  if (req.query.from && req.query.to) {
+    thisMonthStart = req.query.from;
+    // Add 1 day to 'to' so it's inclusive
+    const toDate = new Date(req.query.to);
+    toDate.setDate(toDate.getDate() + 1);
+    nextMonthStart = toDate.toISOString().slice(0, 10);
+    // "last period" = same duration before the from date
+    const fromDate = new Date(req.query.from);
+    const days = Math.round((new Date(req.query.to) - fromDate) / 86400000) + 1;
+    const prevFrom = new Date(fromDate); prevFrom.setDate(prevFrom.getDate() - days);
+    lastMonthStart = prevFrom.toISOString().slice(0, 10);
+    rangeLabel = `${req.query.from} to ${req.query.to}`;
   } else {
-    targetDate = new Date();
-    targetDate.setDate(1);
+    // Month mode: ?month=2026-05
+    const monthParam = req.query.month;
+    let targetDate;
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+      targetDate = new Date(`${monthParam}-01`);
+    } else {
+      targetDate = new Date();
+      targetDate.setDate(1);
+    }
+    thisMonthStart = targetDate.toISOString().slice(0, 10);
+    nextMonthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1).toISOString().slice(0, 10);
+    lastMonthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1).toISOString().slice(0, 10);
+    rangeLabel = targetDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   }
-  const thisMonthStart = targetDate.toISOString().slice(0, 10);
-  const nextMonthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1).toISOString().slice(0, 10);
-  const lastMonthStart = new Date(targetDate.getFullYear(), targetDate.getMonth() - 1, 1).toISOString().slice(0, 10);
 
   try {
     const [thisMonth, lastMonth, byAgent, byContainer, tripsList, allMonths] = await Promise.all([
@@ -205,7 +223,8 @@ router.get('/reports', authenticate, requireRole('admin', 'super_admin'), async 
     const growth = lastRev > 0 ? ((thisRev - lastRev) / lastRev * 100).toFixed(1) : null;
 
     res.json({
-      selected_month: monthParam || new Date().toISOString().slice(0, 7),
+      selected_month: req.query.month || new Date().toISOString().slice(0, 7),
+      range_label: rangeLabel,
       this_month: { revenue: thisRev, trips: parseInt(thisMonth.rows[0].trips) },
       last_month: { revenue: lastRev, trips: parseInt(lastMonth.rows[0].trips) },
       growth_pct: growth,

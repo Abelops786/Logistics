@@ -158,6 +158,16 @@ export default function TripsPage() {
 
   useEffect(() => { load(); }, []);
 
+  async function markComplete(tripId) {
+    if (!confirm('Mark this trip as completed?')) return;
+    try {
+      await api.post(`/api/admin/trips/${tripId}/complete`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to complete trip');
+    }
+  }
+
   const filtered = statusFilter === 'all' ? trips : trips.filter((t) => t.status === statusFilter);
 
   return (
@@ -227,14 +237,24 @@ export default function TripsPage() {
                       <p className="text-xs text-gray-500 mt-1">Vehicle: {trip.plate_number} • Driver: {trip.driver_name}</p>
                     )}
                   </div>
-                  {trip.status === 'pending' && (
-                    <button
-                      onClick={() => setAssignTrip(trip)}
-                      className="ml-4 px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
-                    >
-                      Assign
-                    </button>
-                  )}
+                  <div className="ml-4 flex flex-col gap-2">
+                    {trip.status === 'pending' && (
+                      <button
+                        onClick={() => setAssignTrip(trip)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+                      >
+                        Assign
+                      </button>
+                    )}
+                    {trip.status === 'approved' && (
+                      <button
+                        onClick={() => markComplete(trip.id)}
+                        className="px-4 py-2 bg-green-700 text-white rounded text-sm font-medium hover:bg-green-800"
+                      >
+                        ✓ Complete
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );

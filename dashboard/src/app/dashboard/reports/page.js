@@ -38,8 +38,18 @@ export default function ReportsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [activeRange, setActiveRange] = useState('month');
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
+
+  function getDateRange(rangeKey) {
+    const today = new Date();
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    const offsets = { today: 0, '3d': 2, '7d': 6, '15d': 14, '30d': 29 };
+    const days = offsets[rangeKey];
+    const from = new Date(today); from.setDate(today.getDate() - days);
+    return { from: fmt(from), to: fmt(today) };
+  }
 
   async function load(month) {
     setLoading(true);
@@ -48,6 +58,20 @@ export default function ReportsPage() {
       const res = await api.get(url);
       setData(res.data);
       setSelectedMonth(res.data.selected_month);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadRange(rangeKey) {
+    setActiveRange(rangeKey);
+    setLoading(true);
+    try {
+      const { from, to } = getDateRange(rangeKey);
+      const res = await api.get(`/api/dashboard/reports?from=${from}&to=${to}`);
+      setData(res.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -86,12 +110,36 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold text-gray-800">Income Reports</h1>
           <p className="text-sm text-gray-400">Month-by-month breakdown with full trip details</p>
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
+          {/* Quick day filters */}
+          {[
+            { key: 'today', label: 'Today' },
+            { key: '3d', label: 'Last 3 Days' },
+            { key: '7d', label: 'Last 7 Days' },
+            { key: '15d', label: 'Last 15 Days' },
+            { key: '30d', label: 'Last 30 Days' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => loadRange(key)}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                activeRange === key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+
+          {/* Month picker */}
           {data?.available_months?.length > 0 && (
             <select
               value={selectedMonth}
-              onChange={(e) => load(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => { setActiveRange('month'); load(e.target.value); }}
+              className={`border rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                activeRange === 'month' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
+              }`}
             >
               {data.available_months.map((m) => {
                 const [year, month] = m.split('-');
@@ -101,7 +149,8 @@ export default function ReportsPage() {
               })}
             </select>
           )}
-          <button onClick={handleExport} className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700">
+
+          <button onClick={handleExport} className="px-4 py-1.5 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700">
             ↓ Export CSV
           </button>
         </div>
@@ -114,7 +163,7 @@ export default function ReportsPage() {
           {/* This month vs Last month */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <MonthCard
-              label={`This Month (${(() => { const [y,m] = (data?.selected_month||'').split('-'); return y && m ? new Date(+y,+m-1,1).toLocaleString('en-US',{month:'long',year:'numeric'}) : data?.selected_month; })()})`}
+              label={data?.range_label || 'This Period'}
               revenue={data?.this_month?.revenue}
               trips={data?.this_month?.trips}
               growth={data?.growth_pct}
