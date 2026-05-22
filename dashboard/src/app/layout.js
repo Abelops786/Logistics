@@ -1,6 +1,13 @@
 import './globals.css';
 
-export const metadata = { title: 'Abel Logistics — Admin' };
+export const metadata = {
+  title: 'Abel Logistics — Admin',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
+};
 
 export default function RootLayout({ children }) {
   return (
