@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
+import { exportCSV } from '../../../lib/exportCsv';
 
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -150,7 +151,22 @@ export default function AgentsPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Agent Management</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Agent Management</h1>
+        <button
+          onClick={() => {
+            const rows = agents.map((a) => ({
+              Name: a.name, Phone: a.phone, CNIC: a.cnic,
+              Region: a.region || '', Status: a.status,
+              Registered: a.created_at?.slice(0, 10) || '',
+            }));
+            exportCSV(rows, 'abel_logistics_agents');
+          }}
+          className="px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700 flex items-center gap-2"
+        >
+          ↓ Export CSV
+        </button>
+      </div>
       <div className="flex gap-2 mb-6">
         {['pending', 'all'].map((t) => (
           <button key={t} onClick={() => setTab(t)}

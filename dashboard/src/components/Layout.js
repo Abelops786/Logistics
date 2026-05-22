@@ -23,7 +23,7 @@ export default function Layout({ children }) {
     <div className="flex min-h-screen">
       <aside className="w-56 bg-gray-900 text-white flex flex-col">
         <div className="px-6 py-5 border-b border-gray-700">
-          <span className="font-bold text-lg">Abel Dispatch</span>
+          <span className="font-bold text-lg">Abel Logistics</span>
           <p className="text-xs text-gray-400 mt-1">Admin Panel</p>
         </div>
         <nav className="flex-1 py-4">

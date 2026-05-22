@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
+import { exportCSV } from '../../../lib/exportCsv';
 
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -144,7 +145,31 @@ export default function TripsPage() {
 
   return (
     <Layout>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">Trip Requests</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Trip Requests</h1>
+        <button
+          onClick={() => {
+            const rows = filtered.map((t) => ({
+              Date: t.created_at?.slice(0, 10) || '',
+              Agent: t.agent_name || '',
+              Phone: t.agent_phone || '',
+              Pickup: t.pickup_location || '',
+              Dropoffs: Array.isArray(t.dropoff_locations) ? t.dropoff_locations.join(' | ') : JSON.parse(t.dropoff_locations || '[]').join(' | '),
+              Container: t.container_type || '',
+              System_Estimate: t.system_estimated_price || '',
+              Agent_Offer: t.agent_requested_price || '',
+              Final_Price: t.admin_final_price || '',
+              Status: t.status || '',
+              Vehicle: t.plate_number || '',
+              Driver: t.driver_name || '',
+            }));
+            exportCSV(rows, 'abel_logistics_trips');
+          }}
+          className="px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700 flex items-center gap-2"
+        >
+          ↓ Export CSV
+        </button>
+      </div>
 
       <div className="flex gap-2 mb-6 flex-wrap">
         {['all', 'pending', 'quoted', 'approved', 'rejected', 'completed'].map((s) => (

@@ -1,6 +1,6 @@
 import './globals.css';
 
-export const metadata = { title: 'Abel Dispatch — Admin' };
+export const metadata = { title: 'Abel Logistics — Admin' };
 
 export default function RootLayout({ children }) {
   return (
