@@ -13,11 +13,14 @@ async function sendWhatsApp(toPhone, variables) {
 
   let message;
   if (plateNumber && driverName) {
-    // Trip approval notification (to agent)
-    message = `*Abel Dispatch*\nTrip Approved! 🚛\nVehicle: ${plateNumber}\nDriver: ${driverName}\nFinal Price: PKR ${price}`;
+    // Trigger 2: Trip approval → agent
+    message = `*Abel Logistics*\nTrip Approved!\nVehicle: ${plateNumber}\nDriver: ${driverName}\nFinal Price: PKR ${price}`;
+  } else if (route && route.includes('approved')) {
+    // Agent account approved
+    message = `*Abel Logistics*\n${route}`;
   } else {
-    // New booking notification (to admin)
-    message = `*Abel Dispatch*\nNew trip request from Agent *${agentName}*.\nRoute: ${route}`;
+    // Trigger 1: New booking → admin
+    message = `*Abel Logistics*\nNew trip request from Agent *${agentName}*.\nRoute: ${route}`;
   }
 
   if (!GATEWAY_URL || !TOKEN) {

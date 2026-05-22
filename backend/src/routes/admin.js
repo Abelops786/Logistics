@@ -32,7 +32,8 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
     if (!rows.length) return res.status(404).json({ message: 'Agent not found' });
 
     if (newStatus === 'active') {
-      await sendWhatsApp(rows[0].phone, [rows[0].name, '', '', '', '']);
+      // Reuse positional vars: agentName in slot 1, rest empty — notification service handles template branching
+      await sendWhatsApp(rows[0].phone, [rows[0].name, 'Your Abel Logistics agent account has been approved. You can now log in.', '', '', '']);
     }
     res.json({ message: `Agent ${newStatus}`, agent: rows[0] });
   } catch (err) {
