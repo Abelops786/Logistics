@@ -5,6 +5,7 @@ import 'screens/auth_screen.dart';
 import 'screens/booking_screen.dart';
 import 'screens/ledger_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,19 +25,14 @@ class AbelDispatchApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Abel Logistics',
+      title: 'Ayazz Memon Pinger',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue.shade700),
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),
-      home: Consumer<AppProvider>(
-        builder: (context, provider, _) {
-          if (!provider.isLoggedIn) return const AuthScreen();
-          return const HomeShell();
-        },
-      ),
+      home: const SplashScreen(),
     );
   }
 }
@@ -58,7 +54,7 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Abel Logistics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('Ayazz Memon Pinger', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           Text(user?.name ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
         ]),
         backgroundColor: Colors.blue.shade700,
