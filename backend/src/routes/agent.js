@@ -57,6 +57,19 @@ router.post('/trips/:id/counter', authenticate, requireRole('agent'), async (req
     if (tripCheck.rows[0].agent_repriced) {
       return res.status(400).json({ message: 'You have already used your one re-price. You can only Accept or Reject now.' });
     }
+
+    // Validate new price is within system estimated range
+    const sysEstimate = parseFloat(tripCheck.rows[0].system_estimated_price);
+    if (sysEstimate > 0) {
+      const low = Math.round(sysEstimate * 0.9);
+      const high = Math.round(sysEstimate * 1.1);
+      if (new_price < low || new_price > high) {
+        return res.status(400).json({
+          message: `Price must be between Rs. ${low.toLocaleString()} and Rs. ${high.toLocaleString()}.`,
+        });
+      }
+    }
+
     const { rows } = await pool.query(
       `UPDATE trips SET agent_requested_price = $1, admin_final_price = NULL,
        status = 'pending', agent_repriced = TRUE, updated_at = NOW() WHERE id = $2 RETURNING *`,

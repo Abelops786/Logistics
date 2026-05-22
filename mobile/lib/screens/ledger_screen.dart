@@ -205,7 +205,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
           Expanded(child: _actionBtn('Reject', Colors.red, () => _confirm(context, trip.id, 'reject', provider))),
           if (!trip.agentRepriced) ...[
             const SizedBox(width: 8),
-            Expanded(child: _actionBtn('Re-Price', Colors.blue, () => _showCounterDialog(context, trip.id, provider))),
+            Expanded(child: _actionBtn('Re-Price', Colors.blue, () => _showCounterDialog(context, trip.id, provider, trip))),
           ],
         ]),
       ]),
@@ -244,31 +244,62 @@ class _LedgerScreenState extends State<LedgerScreen> {
     }
   }
 
-  void _showCounterDialog(BuildContext context, String tripId, AppProvider provider) {
+  void _showCounterDialog(BuildContext context, String tripId, AppProvider provider, Trip trip) {
     final ctrl = TextEditingController();
+    final sysPrice = trip.systemEstimatedPrice ?? 0;
+    final low = (sysPrice * 0.9).round();
+    final high = (sysPrice * 1.1).round();
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Send New Price', style: TextStyle(fontSize: 16)),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Your Counter Price (PKR)',
-            prefixText: 'Rs. ',
-            border: OutlineInputBorder(),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (sysPrice > 0)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Text(
+                  'Valid range: Rs. ${low.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} – Rs. ${high.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}',
+                  style: TextStyle(fontSize: 12, color: Colors.blue.shade800, fontWeight: FontWeight.w500),
+                ),
+              ),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Your Counter Price (PKR)',
+                prefixText: 'Rs. ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              final price = ctrl.text.trim();
-              if (price.isEmpty || int.tryParse(price) == null) return;
+              final price = int.tryParse(ctrl.text.trim());
+              if (price == null) return;
+              if (sysPrice > 0 && (price < low || price > high)) {
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                  content: Text('Price must be between Rs. $low and Rs. $high'),
+                  backgroundColor: Colors.red.shade700,
+                ));
+                return;
+              }
               Navigator.pop(ctx);
               try {
-                await ApiService.post('/api/agent/trips/$tripId/counter', {'new_price': int.parse(price)});
+                await ApiService.post('/api/agent/trips/$tripId/counter', {'new_price': price});
                 await provider.loadLedger();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

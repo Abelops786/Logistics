@@ -70,6 +70,17 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
+  // Validate agent counter offer is within estimated range
+  if (agent_requested_price != null && system_estimated_price != null) {
+    const low = Math.round(system_estimated_price * 0.9);
+    const high = Math.round(system_estimated_price * 1.1);
+    if (agent_requested_price < low || agent_requested_price > high) {
+      return res.status(400).json({
+        message: `Counter price must be between Rs. ${low.toLocaleString()} and Rs. ${high.toLocaleString()} (within the system estimate range).`,
+      });
+    }
+  }
+
   try {
     const { rows } = await pool.query(
       `INSERT INTO trips (agent_id, pickup_location, dropoff_locations, container_type, system_estimated_price, agent_requested_price, status)

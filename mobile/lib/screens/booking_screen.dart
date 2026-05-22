@@ -61,6 +61,17 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
+    // Validate counter offer is within estimate range
+    if (_counterOffer && _counterPriceCtrl.text.isNotEmpty && _estimateLow != null) {
+      final offered = int.tryParse(_counterPriceCtrl.text) ?? 0;
+      if (offered < _estimateLow! || offered > _estimateHigh!) {
+        _showErr(
+          'Client price must be between Rs. ${_estimateLow!.toStringAsFixed(0)} and Rs. ${_estimateHigh!.toStringAsFixed(0)}.',
+        );
+        return;
+      }
+    }
+
     setState(() => _submitting = true);
     try {
       final body = {
@@ -277,6 +288,10 @@ class _BookingScreenState extends State<BookingScreen> {
               fillColor: Colors.grey.shade50,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+              helperText: _estimateLow != null
+                  ? 'Must be between Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}'
+                  : 'Get estimate first to validate range',
+              helperStyle: TextStyle(fontSize: 11, color: Colors.orange.shade700),
             ),
           ),
         ],
