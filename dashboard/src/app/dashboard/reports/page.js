@@ -93,9 +93,12 @@ export default function ReportsPage() {
               onChange={(e) => load(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {data.available_months.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
+              {data.available_months.map((m) => {
+                const [year, month] = m.split('-');
+                const label = new Date(parseInt(year), parseInt(month) - 1, 1)
+                  .toLocaleString('en-US', { month: 'long', year: 'numeric' });
+                return <option key={m} value={m}>{label}</option>;
+              })}
             </select>
           )}
           <button onClick={handleExport} className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700">
@@ -111,7 +114,7 @@ export default function ReportsPage() {
           {/* This month vs Last month */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <MonthCard
-              label={`This Month (${data?.selected_month})`}
+              label={`This Month (${(() => { const [y,m] = (data?.selected_month||'').split('-'); return y && m ? new Date(+y,+m-1,1).toLocaleString('en-US',{month:'long',year:'numeric'}) : data?.selected_month; })()})`}
               revenue={data?.this_month?.revenue}
               trips={data?.this_month?.trips}
               growth={data?.growth_pct}

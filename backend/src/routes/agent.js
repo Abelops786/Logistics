@@ -22,7 +22,7 @@ router.get('/ledger', authenticate, requireRole('agent'), async (req, res) => {
     const trips = await pool.query(
       `SELECT t.id, t.pickup_location, t.dropoff_locations, t.container_type,
               t.system_estimated_price, t.agent_requested_price, t.admin_final_price,
-              t.status, t.created_at,
+              t.status, t.agent_repriced, t.created_at,
               v.plate_number, d.name AS driver_name, d.phone AS driver_phone
        FROM trips t
        LEFT JOIN vehicles v ON v.id = t.vehicle_id
@@ -54,9 +54,12 @@ router.post('/trips/:id/counter', authenticate, requireRole('agent'), async (req
     if (tripCheck.rows[0].status !== 'quoted') {
       return res.status(400).json({ message: 'Can only counter-price a quoted trip' });
     }
+    if (tripCheck.rows[0].agent_repriced) {
+      return res.status(400).json({ message: 'You have already used your one re-price. You can only Accept or Reject now.' });
+    }
     const { rows } = await pool.query(
       `UPDATE trips SET agent_requested_price = $1, admin_final_price = NULL,
-       status = 'pending', updated_at = NOW() WHERE id = $2 RETURNING *`,
+       status = 'pending', agent_repriced = TRUE, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [new_price, req.params.id]
     );
     res.json({ message: 'Counter price sent. Admin will review.', trip: rows[0] });

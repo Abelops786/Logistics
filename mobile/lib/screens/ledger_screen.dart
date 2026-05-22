@@ -203,8 +203,10 @@ class _LedgerScreenState extends State<LedgerScreen> {
           Expanded(child: _actionBtn('Accept', Colors.green, () => _confirm(context, trip.id, 'accept', provider))),
           const SizedBox(width: 8),
           Expanded(child: _actionBtn('Reject', Colors.red, () => _confirm(context, trip.id, 'reject', provider))),
-          const SizedBox(width: 8),
-          Expanded(child: _actionBtn('Re-Price', Colors.blue, () => _showCounterDialog(context, trip.id, provider))),
+          if (!trip.agentRepriced) ...[
+            const SizedBox(width: 8),
+            Expanded(child: _actionBtn('Re-Price', Colors.blue, () => _showCounterDialog(context, trip.id, provider))),
+          ],
         ]),
       ]),
     );
