@@ -3,9 +3,8 @@ import './globals.css';
 export const metadata = {
   title: 'Abel Logistics — Admin',
   icons: {
-    icon: '/favicon.png',
+    icon: [{ url: '/favicon.png', type: 'image/png' }],
     shortcut: '/favicon.png',
-    apple: '/favicon.png',
   },
 };
 
