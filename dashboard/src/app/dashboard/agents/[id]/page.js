@@ -6,6 +6,7 @@ import api from '../../../../lib/api';
 import { exportCSV } from '../../../../lib/exportCsv';
 
 const canAddPenalty = (status) => status === 'approved' || status === 'completed';
+const canAssign = (status) => status === 'pending' || status === 'quoted';
 
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -23,13 +24,41 @@ function fmt(n) {
 }
 
 // ── Trip Detail Modal ─────────────────────────────────────────────────────
-function TripDetailModal({ trip, onClose, onPenaltyApplied }) {
+function TripDetailModal({ trip, onClose, onPenaltyApplied, vehicles }) {
   const drops = Array.isArray(trip.dropoff_locations)
     ? trip.dropoff_locations
     : (() => { try { return JSON.parse(trip.dropoff_locations || '[]'); } catch { return []; } })();
 
   const [penalty, setPenalty] = useState('');
   const [applying, setApplying] = useState(false);
+
+  // Assign / price form
+  const [assignForm, setAssignForm] = useState({
+    final_price: trip.agent_requested_price || trip.system_estimated_price || '',
+    vehicle_id: '',
+    payment_type: 'bank',
+  });
+  const [assigning, setAssigning] = useState(false);
+  const assignableVehicles = (vehicles || []).filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
+  const selectedVehicle = assignableVehicles.find((v) => v.id === assignForm.vehicle_id);
+
+  async function submitAssign(e) {
+    e.preventDefault();
+    if (!selectedVehicle?.assigned_driver_id) {
+      alert('This vehicle has no driver assigned. Go to Vehicles page first.');
+      return;
+    }
+    setAssigning(true);
+    try {
+      await api.post(`/api/admin/trips/${trip.id}/assign`, {
+        ...assignForm,
+        driver_id: selectedVehicle.assigned_driver_id,
+      });
+      onPenaltyApplied?.();
+      onClose();
+    } catch (err) { alert(err.response?.data?.message || 'Failed to assign'); }
+    finally { setAssigning(false); }
+  }
   const total = (parseFloat(trip.admin_final_price) || 0) + (parseFloat(trip.detention_penalty) || 0);
 
   async function applyPenalty(e) {
@@ -89,6 +118,63 @@ function TripDetailModal({ trip, onClose, onPenaltyApplied }) {
           {trip.not_complete_reason && <Row label="Not Complete Reason" value={trip.not_complete_reason} color="text-red-600" />}
         </div>
 
+        {/* Admin Pricing — for pending & quoted trips */}
+        {canAssign(trip.status) && (
+          <div className="mt-4 border border-blue-200 bg-blue-50 rounded-lg p-4">
+            <p className="text-sm font-semibold text-blue-800 mb-3">
+              💰 Set Price & Approve Trip
+              {trip.agent_requested_price && (
+                <span className="ml-2 text-xs font-normal text-orange-600">
+                  Agent offered: Rs. {parseInt(trip.agent_requested_price).toLocaleString()}
+                </span>
+              )}
+            </p>
+            <form onSubmit={submitAssign} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Final Price (PKR) <span className="text-red-500">*</span></label>
+                <input type="number" required value={assignForm.final_price}
+                  onChange={(e) => setAssignForm({ ...assignForm, final_price: e.target.value })}
+                  placeholder="Enter final price"
+                  className="w-full border border-blue-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Vehicle <span className="text-red-500">*</span></label>
+                <select required value={assignForm.vehicle_id}
+                  onChange={(e) => setAssignForm({ ...assignForm, vehicle_id: e.target.value })}
+                  className="w-full border border-blue-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select Vehicle</option>
+                  {assignableVehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.plate_number} — {v.container_type?.replace(/_/g, ' ')}
+                      {v.driver_name ? ` (Driver: ${v.driver_name})` : ' ⚠ No driver'}
+                    </option>
+                  ))}
+                </select>
+                {selectedVehicle && (
+                  <p className={`text-xs mt-1 ${selectedVehicle.driver_name ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {selectedVehicle.driver_name
+                      ? `✓ Driver: ${selectedVehicle.driver_name} • ${selectedVehicle.driver_phone || ''}`
+                      : '⚠ No driver assigned to this vehicle'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Payment Type <span className="text-red-500">*</span></label>
+                <select value={assignForm.payment_type}
+                  onChange={(e) => setAssignForm({ ...assignForm, payment_type: e.target.value })}
+                  className="w-full border border-blue-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="bank">Bank Transfer</option>
+                  <option value="cash">Cash</option>
+                </select>
+              </div>
+              <button type="submit" disabled={assigning || !selectedVehicle?.driver_name}
+                className="w-full bg-blue-600 text-white py-2 rounded text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {assigning ? 'Approving...' : '✓ Set Price & Approve Trip'}
+              </button>
+            </form>
+          </div>
+        )}
+
         {/* Detention Penalty — available for approved & completed trips */}
         {canAddPenalty(trip.status) && (
           <div className="mt-4 border border-orange-200 bg-orange-50 rounded-lg p-4">
@@ -135,6 +221,7 @@ export default function AgentProfilePage() {
   const { id } = useParams();
   const router = useRouter();
   const [data, setData] = useState(null);
+  const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('month');
   const [customFrom, setCustomFrom] = useState('');
@@ -153,7 +240,10 @@ export default function AgentProfilePage() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load('month'); }, [id]);
+  useEffect(() => {
+    load('month');
+    api.get('/api/admin/vehicles').then((r) => setVehicles(r.data)).catch(() => {});
+  }, [id]);
 
   function handlePeriod(p) {
     setPeriod(p);
@@ -367,6 +457,7 @@ export default function AgentProfilePage() {
       {viewTrip && (
         <TripDetailModal
           trip={viewTrip}
+          vehicles={vehicles}
           onClose={() => setViewTrip(null)}
           onPenaltyApplied={() => { load(period, customFrom, customTo); setViewTrip(null); }}
         />
