@@ -6,7 +6,7 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 async function migrate() {
-  const files = ['001_create_tables.sql', '002_updates.sql', '003_reprice_flag.sql', '004_notifications.sql'];
+  const files = ['001_create_tables.sql', '002_updates.sql', '003_reprice_flag.sql', '004_notifications.sql', '005_trip_extras.sql'];
   try {
     for (const file of files) {
       const filePath = path.join(__dirname, file);

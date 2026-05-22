@@ -298,15 +298,95 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
 
 // POST /api/admin/trips/:id/complete
 router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
+  const { notes } = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE trips SET status = 'completed', updated_at = NOW()
-       WHERE id = $1 AND status = 'approved'
+      `UPDATE trips SET status = 'completed', completion_notes = $1,
+       total_amount = admin_final_price + COALESCE(detention_penalty, 0),
+       updated_at = NOW()
+       WHERE id = $2 AND status = 'approved'
        RETURNING *`,
-      [req.params.id]
+      [notes || null, req.params.id]
     );
     if (!rows.length) return res.status(400).json({ message: 'Trip not found or not in approved status' });
-    res.json({ message: 'Trip marked as completed', trip: rows[0] });
+
+    // Notify agent
+    const agentRow = await pool.query('SELECT name FROM users WHERE id = $1', [rows[0].agent_id]);
+    await notify(rows[0].agent_id, 'Trip Completed ✅', `Your trip has been marked as completed.${notes ? ' Note: ' + notes : ''}`, 'trip_approved', rows[0].id);
+
+    res.json({ message: 'Trip completed', trip: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/admin/trips/:id/not-complete
+router.post('/trips/:id/not-complete', ...isAdmin, async (req, res) => {
+  const { reason } = req.body;
+  if (!reason?.trim()) return res.status(400).json({ message: 'Reason is required' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE trips SET status = 'rejected', not_complete_reason = $1, updated_at = NOW()
+       WHERE id = $2 AND status = 'approved'
+       RETURNING *`,
+      [reason, req.params.id]
+    );
+    if (!rows.length) return res.status(400).json({ message: 'Trip not found or not in approved status' });
+
+    await notify(rows[0].agent_id, 'Trip Not Completed ❌', `Reason: ${reason}`, 'trip_rejected', rows[0].id);
+    res.json({ message: 'Trip marked as not complete', trip: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/admin/trips/:id/penalty
+router.post('/trips/:id/penalty', ...isAdmin, async (req, res) => {
+  const { penalty_amount } = req.body;
+  if (!penalty_amount || isNaN(penalty_amount) || penalty_amount <= 0) {
+    return res.status(400).json({ message: 'Valid penalty amount required' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE trips
+       SET detention_penalty = $1,
+           total_amount = COALESCE(admin_final_price, 0) + $1,
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING *, agent_id`,
+      [penalty_amount, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Trip not found' });
+
+    const trip = rows[0];
+    const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
+    const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
+
+    // In-app notification
+    await notify(
+      trip.agent_id,
+      '⚠️ Detention Penalty Applied',
+      `A detention penalty of PKR ${Number(penalty_amount).toLocaleString()} has been added to your trip.\nRoute: ${route}\nNew Total: PKR ${Number(trip.total_amount).toLocaleString()}`,
+      'trip_quoted',
+      trip.id
+    );
+
+    // WhatsApp to agent
+    const agentRow = await pool.query('SELECT name, phone FROM users WHERE id = $1', [trip.agent_id]);
+    if (agentRow.rows.length) {
+      await sendWhatsApp(agentRow.rows[0].phone, [
+        agentRow.rows[0].name,
+        route,
+        String(trip.total_amount),
+        `⚠️ Detention Penalty: PKR ${Number(penalty_amount).toLocaleString()} added. New total: PKR ${Number(trip.total_amount).toLocaleString()}`,
+        '',
+      ]);
+    }
+
+    res.json({ message: 'Penalty applied and agent notified', trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
