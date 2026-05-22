@@ -10,6 +10,7 @@ class Trip {
   final String createdAt;
   final String? plateNumber;
   final String? driverName;
+  final String? driverPhone;
 
   Trip({
     required this.id,
@@ -23,6 +24,7 @@ class Trip {
     required this.createdAt,
     this.plateNumber,
     this.driverName,
+    this.driverPhone,
   });
 
   factory Trip.fromJson(Map<String, dynamic> j) {
@@ -45,6 +47,7 @@ class Trip {
       createdAt: j['created_at'],
       plateNumber: j['plate_number'],
       driverName: j['driver_name'],
+      driverPhone: j['driver_phone'],
     );
   }
 

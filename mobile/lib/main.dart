@@ -23,7 +23,7 @@ class AbelDispatchApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Abel Logistics',
+      title: 'Abel Dispatch',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue.shade700),
@@ -57,7 +57,7 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Abel Logistics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('Abel Dispatch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           Text(user?.name ?? '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
         ]),
         backgroundColor: Colors.blue.shade700,

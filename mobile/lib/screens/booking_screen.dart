@@ -39,14 +39,17 @@ class _BookingScreenState extends State<BookingScreen> {
         'dropoff_locations': drops,
         'container_type': _containerType,
       });
-      if (res.containsKey('estimate_low')) {
+      if (res['estimate_low'] != null) {
         setState(() {
           _estimateLow = double.tryParse(res['estimate_low'].toString());
           _estimateHigh = double.tryParse(res['estimate_high'].toString());
         });
       }
-    } catch (_) {}
-    finally { setState(() => _estimating = false); }
+    } catch (e) {
+      // Estimate failed silently — user can still submit without estimate
+    } finally {
+      setState(() => _estimating = false);
+    }
   }
 
   Future<void> _submitRequest() async {
@@ -70,15 +73,15 @@ class _BookingScreenState extends State<BookingScreen> {
       };
 
       final res = await ApiService.post('/api/trips/request', body);
-      if (res.containsKey('trip')) {
+      if (res != null && res['trip'] != null) {
         await context.read<AppProvider>().loadLedger();
         _showSuccess('Trip request submitted! Admin will review shortly.');
         _resetForm();
       } else {
-        _showErr(res['message'] ?? 'Submission failed');
+        _showErr(res?['message'] ?? 'Submission failed. Please try again.');
       }
-    } catch (_) {
-      _showErr('Network error. Please try again.');
+    } catch (e) {
+      _showErr(e.toString());
     } finally {
       setState(() => _submitting = false);
     }

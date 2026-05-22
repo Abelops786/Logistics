@@ -39,6 +39,33 @@ router.get('/ledger', authenticate, requireRole('agent'), async (req, res) => {
   }
 });
 
+// POST /api/agent/trips/:id/counter — agent sends a new counter price on a quoted trip
+router.post('/trips/:id/counter', authenticate, requireRole('agent'), async (req, res) => {
+  const { new_price } = req.body;
+  if (!new_price || isNaN(new_price)) {
+    return res.status(400).json({ message: 'new_price is required' });
+  }
+  try {
+    const tripCheck = await pool.query(
+      'SELECT * FROM trips WHERE id = $1 AND agent_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!tripCheck.rows.length) return res.status(404).json({ message: 'Trip not found' });
+    if (tripCheck.rows[0].status !== 'quoted') {
+      return res.status(400).json({ message: 'Can only counter-price a quoted trip' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE trips SET agent_requested_price = $1, admin_final_price = NULL,
+       status = 'pending', updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [new_price, req.params.id]
+    );
+    res.json({ message: 'Counter price sent. Admin will review.', trip: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // POST /api/agent/trips/:id/confirm — agent accepts or rejects admin-quoted price
 router.post('/trips/:id/confirm', authenticate, requireRole('agent'), async (req, res) => {
   const { action } = req.body; // 'accept' | 'reject'

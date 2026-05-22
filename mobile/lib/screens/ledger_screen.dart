@@ -49,8 +49,11 @@ class _LedgerScreenState extends State<LedgerScreen> {
                   const Text('Trip History', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 12),
                   if (trips.isEmpty)
-                    Container(padding: const EdgeInsets.all(40), alignment: Alignment.center,
-                      child: Text('No trips yet', style: TextStyle(color: Colors.grey.shade400)))
+                    Container(
+                      padding: const EdgeInsets.all(40),
+                      alignment: Alignment.center,
+                      child: Text('No trips yet', style: TextStyle(color: Colors.grey.shade400)),
+                    )
                   else
                     ...trips.map((t) => _tripCard(context, t, provider)),
                 ],
@@ -75,6 +78,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
   String _fmt(dynamic val) {
     if (val == null) return '0';
     final d = double.tryParse(val.toString()) ?? 0;
+    if (d >= 1000000) return '${(d / 1000000).toStringAsFixed(1)}M';
     if (d >= 1000) return '${(d / 1000).toStringAsFixed(1)}K';
     return d.toStringAsFixed(0);
   }
@@ -83,7 +87,8 @@ class _LedgerScreenState extends State<LedgerScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10),
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(children: [
@@ -94,68 +99,73 @@ class _LedgerScreenState extends State<LedgerScreen> {
     );
   }
 
+  static const _statusColors = {
+    'pending': Colors.orange,
+    'quoted': Colors.purple,
+    'approved': Colors.green,
+    'rejected': Colors.red,
+    'completed': Colors.blue,
+  };
+
   Widget _tripCard(BuildContext context, Trip trip, AppProvider provider) {
-    final statusColors = {
-      'pending': Colors.orange,
-      'quoted': Colors.purple,
-      'approved': Colors.green,
-      'rejected': Colors.red,
-      'completed': Colors.blue,
-    };
-    final color = statusColors[trip.status] ?? Colors.grey;
+    final color = _statusColors[trip.status] ?? Colors.grey;
 
     return GestureDetector(
-      onTap: () => _showTripDetail(context, trip, provider),
+      onTap: () => _showDetail(context, trip),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: trip.status == 'quoted' ? Colors.purple.shade200 : Colors.grey.shade200, width: trip.status == 'quoted' ? 2 : 1),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: trip.status == 'quoted' ? Colors.purple.shade300 : Colors.grey.shade200,
+            width: trip.status == 'quoted' ? 2 : 1,
+          ),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header row
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-              child: Text(trip.status.toUpperCase(), style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+              child: Text(trip.status.toUpperCase(), style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700)),
             ),
             Text(trip.createdAt.substring(0, 10), style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ]),
+
           const SizedBox(height: 8),
           Text(trip.route, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           Text(trip.containerType.replaceAll('_', ' '), style: const TextStyle(fontSize: 12, color: Colors.grey)),
 
-          // Quoted: admin set a price, agent needs to confirm
-          if (trip.status == 'quoted' && trip.adminFinalPrice != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.purple.shade200)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Admin Quoted Price', style: TextStyle(fontSize: 11, color: Colors.purple.shade700, fontWeight: FontWeight.w600)),
-                Text('Rs. ${trip.adminFinalPrice!.toStringAsFixed(0)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple.shade700)),
-                if (trip.plateNumber != null) Text('Vehicle: ${trip.plateNumber}  •  Driver: ${trip.driverName ?? "—"}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(child: _confirmBtn(context, trip.id, 'accept', provider)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _confirmBtn(context, trip.id, 'reject', provider)),
-                ]),
-              ]),
+          // QUOTED: admin has priced it, agent needs to respond
+          if (trip.status == 'quoted' && trip.adminFinalPrice != null)
+            _quotedActionCard(context, trip, provider),
+
+          // APPROVED: show final price + vehicle/driver
+          if (trip.status == 'approved' && trip.adminFinalPrice != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Approved Price: Rs. ${trip.adminFinalPrice!.toStringAsFixed(0)}',
+              style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600),
             ),
-          ] else if (trip.adminFinalPrice != null) ...[
-            const SizedBox(height: 6),
-            Text('Approved Price: Rs. ${trip.adminFinalPrice!.toStringAsFixed(0)}',
-              style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
             if (trip.plateNumber != null)
-              Text('Vehicle: ${trip.plateNumber}  •  Driver: ${trip.driverName ?? "—"}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-          ] else if (trip.agentRequestedPrice != null) ...[
-            const SizedBox(height: 6),
-            Text('Your Offer: Rs. ${trip.agentRequestedPrice!.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12, color: Colors.orange)),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Vehicle: ${trip.plateNumber}  •  Driver: ${trip.driverName ?? "—"}${trip.driverPhone != null ? "  •  ${trip.driverPhone}" : ""}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ),
           ],
 
-          // Tap for details hint
+          // PENDING with counter offer
+          if (trip.status == 'pending' && trip.agentRequestedPrice != null) ...[
+            const SizedBox(height: 6),
+            Text('Your Offer: Rs. ${trip.agentRequestedPrice!.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w500)),
+          ],
+
           const SizedBox(height: 6),
           Text('Tap to view details', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
         ]),
@@ -163,22 +173,59 @@ class _LedgerScreenState extends State<LedgerScreen> {
     );
   }
 
-  Widget _confirmBtn(BuildContext context, String tripId, String action, AppProvider provider) {
-    final isAccept = action == 'accept';
+  Widget _quotedActionCard(BuildContext context, Trip trip, AppProvider provider) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.purple.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.purple.shade200),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Admin Quoted Price', style: TextStyle(fontSize: 11, color: Colors.purple.shade700, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 2),
+        Text(
+          'Rs. ${trip.adminFinalPrice!.toStringAsFixed(0)}',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+        ),
+        if (trip.plateNumber != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              'Vehicle: ${trip.plateNumber}  •  Driver: ${trip.driverName ?? "—"}${trip.driverPhone != null ? "\nPhone: ${trip.driverPhone}" : ""}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ),
+        const SizedBox(height: 12),
+        // 3 action buttons
+        Row(children: [
+          Expanded(child: _actionBtn('Accept', Colors.green, () => _confirm(context, trip.id, 'accept', provider))),
+          const SizedBox(width: 8),
+          Expanded(child: _actionBtn('Reject', Colors.red, () => _confirm(context, trip.id, 'reject', provider))),
+          const SizedBox(width: 8),
+          Expanded(child: _actionBtn('Re-Price', Colors.blue, () => _showCounterDialog(context, trip.id, provider))),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _actionBtn(String label, Color color, VoidCallback onTap) {
     return ElevatedButton(
-      onPressed: () => _confirmTrip(context, tripId, action, provider),
+      onPressed: onTap,
       style: ElevatedButton.styleFrom(
-        backgroundColor: isAccept ? Colors.green : Colors.red,
+        backgroundColor: color,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         elevation: 0,
+        minimumSize: const Size(0, 36),
       ),
-      child: Text(isAccept ? 'Accept Price' : 'Reject', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 
-  Future<void> _confirmTrip(BuildContext context, String tripId, String action, AppProvider provider) async {
+  Future<void> _confirm(BuildContext context, String tripId, String action, AppProvider provider) async {
     try {
       await ApiService.post('/api/agent/trips/$tripId/confirm', {'action': action});
       await provider.loadLedger();
@@ -190,12 +237,58 @@ class _LedgerScreenState extends State<LedgerScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red.shade700));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700));
       }
     }
   }
 
-  void _showTripDetail(BuildContext context, Trip trip, AppProvider provider) {
+  void _showCounterDialog(BuildContext context, String tripId, AppProvider provider) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Send New Price', style: TextStyle(fontSize: 16)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Your Counter Price (PKR)',
+            prefixText: 'Rs. ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final price = ctrl.text.trim();
+              if (price.isEmpty || int.tryParse(price) == null) return;
+              Navigator.pop(ctx);
+              try {
+                await ApiService.post('/api/agent/trips/$tripId/counter', {'new_price': int.parse(price)});
+                await provider.loadLedger();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Counter price sent to admin.'), backgroundColor: Colors.blue),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700),
+                  );
+                }
+              }
+            },
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDetail(BuildContext context, Trip trip) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -211,15 +304,17 @@ class _TripDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColors = {
+    final color = {
       'pending': Colors.orange, 'quoted': Colors.purple,
       'approved': Colors.green, 'rejected': Colors.red, 'completed': Colors.blue,
-    };
-    final color = statusColors[trip.status] ?? Colors.grey;
+    }[trip.status] ?? Colors.grey;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      height: MediaQuery.of(context).size.height * 0.78,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -227,30 +322,41 @@ class _TripDetailSheet extends StatelessWidget {
           IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
         ]),
         const Divider(),
-        const SizedBox(height: 8),
-        _row('Status', trip.status.toUpperCase(), valueColor: color),
-        _row('Date', trip.createdAt.substring(0, 10)),
-        _row('Container', trip.containerType.replaceAll('_', ' ')),
-        const SizedBox(height: 12),
-        const Text('Route', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-        const SizedBox(height: 4),
-        _locationRow(Icons.radio_button_checked, Colors.green, trip.pickupLocation),
-        ...trip.dropoffLocations.map((d) => _locationRow(Icons.location_on, Colors.red, d)),
-        const SizedBox(height: 12),
-        const Divider(),
-        const SizedBox(height: 8),
-        if (trip.systemEstimatedPrice != null) _row('System Estimate', 'Rs. ${trip.systemEstimatedPrice!.toStringAsFixed(0)}'),
-        if (trip.agentRequestedPrice != null) _row('Your Offer', 'Rs. ${trip.agentRequestedPrice!.toStringAsFixed(0)}', valueColor: Colors.orange),
-        if (trip.adminFinalPrice != null) _row('Admin Final Price', 'Rs. ${trip.adminFinalPrice!.toStringAsFixed(0)}', valueColor: color),
-        if (trip.plateNumber != null) ...[
-          const SizedBox(height: 12),
-          const Divider(),
-          const SizedBox(height: 8),
-          const Text('Assignment', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-          const SizedBox(height: 4),
-          _row('Vehicle', trip.plateNumber!),
-          if (trip.driverName != null) _row('Driver', trip.driverName!),
-        ],
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _row('Status', trip.status.toUpperCase(), valueColor: color),
+              _row('Date', trip.createdAt.substring(0, 10)),
+              _row('Container', trip.containerType.replaceAll('_', ' ')),
+              const SizedBox(height: 14),
+              const Text('Route', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+              const SizedBox(height: 6),
+              _locRow(Icons.radio_button_checked, Colors.green, trip.pickupLocation),
+              ...trip.dropoffLocations.map((d) => _locRow(Icons.location_on, Colors.red, d)),
+              const SizedBox(height: 14),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text('Pricing', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+              const SizedBox(height: 6),
+              if (trip.systemEstimatedPrice != null)
+                _row('System Estimate', 'Rs. ${trip.systemEstimatedPrice!.toStringAsFixed(0)}'),
+              if (trip.agentRequestedPrice != null)
+                _row('Your Offer', 'Rs. ${trip.agentRequestedPrice!.toStringAsFixed(0)}', valueColor: Colors.orange),
+              if (trip.adminFinalPrice != null)
+                _row('Admin Final Price', 'Rs. ${trip.adminFinalPrice!.toStringAsFixed(0)}', valueColor: color),
+              if (trip.plateNumber != null) ...[
+                const SizedBox(height: 14),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text('Assignment', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+                const SizedBox(height: 6),
+                _row('Vehicle', trip.plateNumber!),
+                if (trip.driverName != null) _row('Driver', trip.driverName!),
+                if (trip.driverPhone != null) _row('Driver Phone', trip.driverPhone!),
+              ],
+            ]),
+          ),
+        ),
       ]),
     );
   }
@@ -260,12 +366,12 @@ class _TripDetailSheet extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? Colors.black87)),
+        Flexible(child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: valueColor ?? Colors.black87), textAlign: TextAlign.right)),
       ]),
     );
   }
 
-  Widget _locationRow(IconData icon, Color color, String text) {
+  Widget _locRow(IconData icon, Color color, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(children: [
