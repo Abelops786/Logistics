@@ -17,6 +17,9 @@ class _BookingScreenState extends State<BookingScreen> {
 
   double? _estimateLow;
   double? _estimateHigh;
+  double? _totalKm;
+  List<dynamic> _legs = [];
+  String _distanceSource = '';
   bool _estimating = false;
   bool _counterOffer = false;
   final _counterPriceCtrl = TextEditingController();
@@ -43,6 +46,9 @@ class _BookingScreenState extends State<BookingScreen> {
         setState(() {
           _estimateLow = double.tryParse(res['estimate_low'].toString());
           _estimateHigh = double.tryParse(res['estimate_high'].toString());
+          _totalKm = double.tryParse(res['total_km'].toString());
+          _legs = res['legs'] as List? ?? [];
+          _distanceSource = res['source']?.toString() ?? '';
         });
       }
     } catch (e) {
@@ -106,6 +112,9 @@ class _BookingScreenState extends State<BookingScreen> {
       _pickupLocation = '';
       _estimateLow = null;
       _estimateHigh = null;
+      _totalKm = null;
+      _legs = [];
+      _distanceSource = '';
       _counterOffer = false;
     });
   }
@@ -259,11 +268,40 @@ class _BookingScreenState extends State<BookingScreen> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('System Estimate', style: TextStyle(fontSize: 12, color: Colors.green)),
+              Row(children: [
+                Text('System Estimate', style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 8),
+                if (_distanceSource == 'google')
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(4)),
+                    child: Text('Google Maps', style: TextStyle(fontSize: 10, color: Colors.blue.shade700))),
+              ]),
+              const SizedBox(height: 4),
               Text(
                 'Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green.shade700),
               ),
+              if (_totalKm != null)
+                Text('Total distance: ${_totalKm!.toStringAsFixed(1)} km',
+                  style: TextStyle(fontSize: 11, color: Colors.green.shade600)),
+              // Per-leg breakdown
+              if (_legs.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 6),
+                ..._legs.map((leg) => Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Row(children: [
+                    const Icon(Icons.arrow_right, size: 14, color: Colors.grey),
+                    Expanded(child: Text(
+                      '${leg['from']?.toString().split(',')[0] ?? ''} → ${leg['to']?.toString().split(',')[0] ?? ''}',
+                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                      overflow: TextOverflow.ellipsis,
+                    )),
+                    Text('${leg['distance_km']} km', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+                  ]),
+                )),
+              ],
             ]),
           ),
         if (_estimateLow == null && !_estimating)
