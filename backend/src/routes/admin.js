@@ -226,9 +226,20 @@ router.get('/trips', ...isAdmin, async (req, res) => {
 
 // POST /api/admin/trips/:id/assign
 router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
-  const { final_price, vehicle_id, driver_id, payment_type } = req.body;
-  if (!final_price || !vehicle_id || !driver_id || !payment_type) {
-    return res.status(400).json({ message: 'final_price, vehicle_id, driver_id, payment_type are required' });
+  const { final_price, vehicle_id, payment_type } = req.body;
+  let { driver_id } = req.body;
+
+  if (!final_price || !vehicle_id || !payment_type) {
+    return res.status(400).json({ message: 'final_price, vehicle_id, payment_type are required' });
+  }
+
+  // Auto-resolve driver from vehicle if not provided
+  if (!driver_id) {
+    const vRow = await pool.query('SELECT assigned_driver_id FROM vehicles WHERE id = $1', [vehicle_id]);
+    driver_id = vRow.rows[0]?.assigned_driver_id;
+    if (!driver_id) {
+      return res.status(400).json({ message: 'This vehicle has no driver assigned. Assign a driver to the vehicle first.' });
+    }
   }
 
   try {

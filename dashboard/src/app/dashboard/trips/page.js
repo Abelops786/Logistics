@@ -12,21 +12,30 @@ const STATUS_COLORS = {
   completed: 'bg-blue-100 text-blue-800',
 };
 
-function AssignModal({ trip, vehicles, drivers, onClose, onAssigned }) {
+function AssignModal({ trip, vehicles, onClose, onAssigned }) {
   const [form, setForm] = useState({
     final_price: trip.agent_requested_price || trip.system_estimated_price || '',
     vehicle_id: '',
-    driver_id: '',
     payment_type: 'bank',
   });
   const [loading, setLoading] = useState(false);
   const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
 
+  const assignableVehicles = vehicles.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
+  const selectedVehicle = assignableVehicles.find((v) => v.id === form.vehicle_id);
+
   async function submit(e) {
     e.preventDefault();
+    if (!selectedVehicle?.assigned_driver_id) {
+      alert('This vehicle has no driver assigned. Go to Vehicles page and assign a driver first.');
+      return;
+    }
     setLoading(true);
     try {
-      await api.post(`/api/admin/trips/${trip.id}/assign`, form);
+      await api.post(`/api/admin/trips/${trip.id}/assign`, {
+        ...form,
+        driver_id: selectedVehicle.assigned_driver_id,
+      });
       onAssigned();
       onClose();
     } catch (err) {
@@ -55,6 +64,7 @@ function AssignModal({ trip, vehicles, drivers, onClose, onAssigned }) {
               required
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle</label>
             <select
@@ -64,25 +74,34 @@ function AssignModal({ trip, vehicles, drivers, onClose, onAssigned }) {
               required
             >
               <option value="">Select Vehicle</option>
-              {vehicles.filter(v => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number)).map((v) => (
-                <option key={v.id} value={v.id}>{v.plate_number} ({v.container_type.replace(/_/g, ' ')})</option>
+              {assignableVehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.plate_number} — {v.container_type.replace(/_/g, ' ')}
+                  {v.driver_name ? ` (Driver: ${v.driver_name})` : ' ⚠ No driver'}
+                </option>
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Driver</label>
-            <select
-              value={form.driver_id}
-              onChange={(e) => setForm({ ...form, driver_id: e.target.value })}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-              required
-            >
-              <option value="">Select Driver</option>
-              {drivers.filter(d => d.status === 'available').map((d) => (
-                <option key={d.id} value={d.id}>{d.name} ({d.phone})</option>
-              ))}
-            </select>
-          </div>
+
+          {/* Auto-show driver from selected vehicle */}
+          {selectedVehicle && (
+            <div className={`rounded-lg px-4 py-3 text-sm ${selectedVehicle.driver_name ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+              {selectedVehicle.driver_name ? (
+                <div className="flex items-center gap-3">
+                  {selectedVehicle.driver_photo && (
+                    <img src={selectedVehicle.driver_photo} alt="" className="w-9 h-9 rounded-full object-cover border border-green-200" />
+                  )}
+                  <div>
+                    <p className="font-semibold text-green-800">Driver: {selectedVehicle.driver_name}</p>
+                    <p className="text-green-600 text-xs">{selectedVehicle.driver_phone}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-yellow-700">⚠ No driver assigned to this vehicle. <a href="/dashboard/vehicles" className="underline font-medium">Assign one first →</a></p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
             <select
@@ -95,11 +114,12 @@ function AssignModal({ trip, vehicles, drivers, onClose, onAssigned }) {
               <option value="cash">Cash</option>
             </select>
           </div>
+
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
-              disabled={loading}
-              className="flex-1 bg-green-600 text-white py-2 rounded font-medium text-sm hover:bg-green-700 disabled:opacity-50"
+              disabled={loading || !selectedVehicle?.driver_name}
+              className="flex-1 bg-green-600 text-white py-2 rounded font-medium text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Approving...' : 'Approve & Assign'}
             </button>
@@ -116,7 +136,6 @@ function AssignModal({ trip, vehicles, drivers, onClose, onAssigned }) {
 export default function TripsPage() {
   const [trips, setTrips] = useState([]);
   const [vehicles, setVehicles] = useState([]);
-  const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assignTrip, setAssignTrip] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -124,14 +143,12 @@ export default function TripsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [tripsRes, vehiclesRes, driversRes] = await Promise.all([
+      const [tripsRes, vehiclesRes] = await Promise.all([
         api.get('/api/admin/trips'),
         api.get('/api/admin/vehicles'),
-        api.get('/api/admin/drivers'),
       ]);
       setTrips(tripsRes.data);
       setVehicles(vehiclesRes.data);
-      setDrivers(driversRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -229,7 +246,6 @@ export default function TripsPage() {
         <AssignModal
           trip={assignTrip}
           vehicles={vehicles}
-          drivers={drivers}
           onClose={() => setAssignTrip(null)}
           onAssigned={load}
         />
