@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../providers/app_provider.dart';
+import '../widgets/location_picker.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -10,8 +11,8 @@ class BookingScreen extends StatefulWidget {
 }
 
 class _BookingScreenState extends State<BookingScreen> {
-  final _pickupCtrl = TextEditingController();
-  final List<TextEditingController> _dropoffCtrls = [TextEditingController()];
+  String _pickupLocation = '';
+  final List<String> _dropoffLocations = [''];
   String _containerType = '50ft_22_wheeler';
 
   double? _estimateLow;
@@ -27,8 +28,8 @@ class _BookingScreenState extends State<BookingScreen> {
   };
 
   Future<void> _fetchEstimate() async {
-    final pickup = _pickupCtrl.text.trim();
-    final drops = _dropoffCtrls.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList();
+    final pickup = _pickupLocation.trim();
+    final drops = _dropoffLocations.where((s) => s.isNotEmpty).toList();
     if (pickup.isEmpty || drops.isEmpty) return;
 
     setState(() { _estimating = true; _estimateLow = null; _estimateHigh = null; });
@@ -49,8 +50,8 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _submitRequest() async {
-    final pickup = _pickupCtrl.text.trim();
-    final drops = _dropoffCtrls.map((c) => c.text.trim()).where((s) => s.isNotEmpty).toList();
+    final pickup = _pickupLocation.trim();
+    final drops = _dropoffLocations.where((s) => s.isNotEmpty).toList();
 
     if (pickup.isEmpty || drops.isEmpty) {
       _showErr('Please fill pickup and at least one dropoff location.');
@@ -84,12 +85,15 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   void _resetForm() {
-    _pickupCtrl.clear();
-    for (final c in _dropoffCtrls) { c.clear(); }
-    _dropoffCtrls.clear();
-    _dropoffCtrls.add(TextEditingController());
+    _dropoffLocations.clear();
+    _dropoffLocations.add('');
     _counterPriceCtrl.clear();
-    setState(() { _estimateLow = null; _estimateHigh = null; _counterOffer = false; });
+    setState(() {
+      _pickupLocation = '';
+      _estimateLow = null;
+      _estimateHigh = null;
+      _counterOffer = false;
+    });
   }
 
   void _showErr(String msg) => ScaffoldMessenger.of(context).showSnackBar(
@@ -155,45 +159,48 @@ class _BookingScreenState extends State<BookingScreen> {
   Widget _buildRouteSection() {
     return Column(
       children: [
-        _locationField('Pickup Location', _pickupCtrl, Icons.radio_button_checked, Colors.green),
+        LocationPickerField(
+          hint: 'Pickup Location',
+          icon: Icons.radio_button_checked,
+          iconColor: Colors.green,
+          initialValue: _pickupLocation,
+          onLocationSelected: (val) {
+            setState(() => _pickupLocation = val);
+            _fetchEstimate();
+          },
+        ),
         const SizedBox(height: 10),
-        ...List.generate(_dropoffCtrls.length, (i) => Padding(
+        ...List.generate(_dropoffLocations.length, (i) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Row(children: [
-            Expanded(child: _locationField('Dropoff ${i + 1}', _dropoffCtrls[i], Icons.location_on, Colors.red)),
-            if (_dropoffCtrls.length > 1) ...[
+            Expanded(
+              child: LocationPickerField(
+                hint: 'Dropoff ${i + 1}',
+                icon: Icons.location_on,
+                iconColor: Colors.red,
+                initialValue: _dropoffLocations[i],
+                onLocationSelected: (val) {
+                  setState(() => _dropoffLocations[i] = val);
+                  _fetchEstimate();
+                },
+              ),
+            ),
+            if (_dropoffLocations.length > 1) ...[
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => setState(() => _dropoffCtrls.removeAt(i)),
+                onTap: () => setState(() => _dropoffLocations.removeAt(i)),
                 child: const Icon(Icons.remove_circle, color: Colors.red, size: 22),
               ),
             ],
           ]),
         )),
         TextButton.icon(
-          onPressed: () => setState(() => _dropoffCtrls.add(TextEditingController())),
+          onPressed: () => setState(() => _dropoffLocations.add('')),
           icon: const Icon(Icons.add, size: 18),
           label: const Text('Add Another Stopover'),
           style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
         ),
       ],
-    );
-  }
-
-  Widget _locationField(String hint, TextEditingController ctrl, IconData icon, Color iconColor) {
-    return TextField(
-      controller: ctrl,
-      onEditingComplete: _fetchEstimate,
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(fontSize: 13),
-        prefixIcon: Icon(icon, color: iconColor, size: 18),
-        filled: true,
-        fillColor: Colors.grey.shade50,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      ),
     );
   }
 

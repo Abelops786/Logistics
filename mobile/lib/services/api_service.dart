@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // After deploying backend to Railway, replace this with your Railway URL.
 // Example: 'https://abel-dispatch-production.up.railway.app'
-const String _baseUrl = 'https://YOUR-APP.up.railway.app';
+const String _baseUrl = 'https://logistics-production-1c64.up.railway.app';
 
 class ApiService {
   static Future<String?> _getToken() async {
