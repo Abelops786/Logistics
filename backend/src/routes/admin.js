@@ -3,6 +3,7 @@ const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { buildTripWhereClause, stripCashFieldsArray } = require('../middleware/tripFilter');
 const { sendWhatsApp } = require('../services/notificationService');
+const { notify } = require('../services/notifyAgent');
 
 const router = express.Router();
 const isAdmin = [authenticate, requireRole('admin', 'super_admin')];
@@ -32,8 +33,8 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
     if (!rows.length) return res.status(404).json({ message: 'Agent not found' });
 
     if (newStatus === 'active') {
-      // Reuse positional vars: agentName in slot 1, rest empty — notification service handles template branching
       await sendWhatsApp(rows[0].phone, [rows[0].name, 'Your Abel Logistics agent account has been approved. You can now log in.', '', '', '']);
+      await notify(rows[0].id, 'Account Approved ✅', 'Your Abel Logistics agent account is now active. You can submit trip requests.', 'account_approved');
     }
     res.json({ message: `Agent ${newStatus}`, agent: rows[0] });
   } catch (err) {
@@ -274,10 +275,17 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
       const driverName = driverRow.rows[0]?.name || '';
 
       if (newStatus === 'quoted') {
-        // Notify agent: admin has quoted a price, needs confirmation
         await sendWhatsApp(agentRow.rows[0].phone, [agentRow.rows[0].name, route, String(final_price), plate, driverName]);
+        await notify(trip.agent_id,
+          'Admin Quoted a Price',
+          `Rs. ${Number(final_price).toLocaleString()} for your trip: ${route}. Please Accept or Reject.`,
+          'trip_quoted', trip.id);
       } else {
         await sendWhatsApp(agentRow.rows[0].phone, [agentRow.rows[0].name, route, String(final_price), plate, driverName]);
+        await notify(trip.agent_id,
+          'Trip Approved! 🎉',
+          `Vehicle: ${plate} • Driver: ${driverName} • Final Price: Rs. ${Number(final_price).toLocaleString()}`,
+          'trip_approved', trip.id);
       }
     }
 

@@ -4,6 +4,7 @@ import 'providers/app_provider.dart';
 import 'screens/auth_screen.dart';
 import 'screens/booking_screen.dart';
 import 'screens/ledger_screen.dart';
+import 'screens/notifications_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +64,29 @@ class _HomeShellState extends State<HomeShell> {
         backgroundColor: Colors.blue.shade700,
         foregroundColor: Colors.white,
         actions: [
+          // Bell icon with unread badge
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+              ),
+              Consumer<AppProvider>(
+                builder: (_, provider, __) {
+                  if (provider.unreadCount == 0) return const SizedBox.shrink();
+                  return Positioned(
+                    right: 8, top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text('${provider.unreadCount}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => context.read<AppProvider>().logout(),

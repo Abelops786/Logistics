@@ -40,6 +40,9 @@ export default function ReportsPage() {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [activeRange, setActiveRange] = useState('month');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [agentFilter, setAgentFilter] = useState('all');
+  const [vehicleFilter, setVehicleFilter] = useState('all');
+  const [driverFilter, setDriverFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   function getDateRange(rangeKey) {
@@ -83,11 +86,18 @@ export default function ReportsPage() {
 
   const filteredTrips = data?.trips?.filter((t) => {
     const matchStatus = statusFilter === 'all' || t.status === statusFilter;
+    const matchAgent = agentFilter === 'all' || t.agent_name === agentFilter;
+    const matchVehicle = vehicleFilter === 'all' || t.plate_number === vehicleFilter;
+    const matchDriver = driverFilter === 'all' || t.driver_name === driverFilter;
     const matchSearch = !search || t.agent_name?.toLowerCase().includes(search.toLowerCase()) ||
       t.pickup_location?.toLowerCase().includes(search.toLowerCase()) ||
       t.plate_number?.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchSearch;
+    return matchStatus && matchAgent && matchVehicle && matchDriver && matchSearch;
   }) || [];
+
+  const uniqueAgents = [...new Set(data?.trips?.map((t) => t.agent_name).filter(Boolean) || [])];
+  const uniqueVehicles = [...new Set(data?.trips?.map((t) => t.plate_number).filter(Boolean) || [])];
+  const uniqueDrivers = [...new Set(data?.trips?.map((t) => t.driver_name).filter(Boolean) || [])];
 
   function handleExport() {
     exportCSV(filteredTrips.map((t) => {
@@ -270,17 +280,25 @@ export default function ReportsPage() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search agent, route, vehicle..."
-                  className="border border-gray-300 rounded px-3 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Search route..."
+                  className="border border-gray-300 rounded px-3 py-1.5 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="border border-gray-300 rounded px-3 py-1.5 text-sm"
-                >
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
                   {['all', 'pending', 'quoted', 'approved', 'rejected', 'completed'].map((s) => (
                     <option key={s} value={s}>{s === 'all' ? 'All Status' : s}</option>
                   ))}
+                </select>
+                <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+                  <option value="all">All Agents</option>
+                  {uniqueAgents.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <select value={vehicleFilter} onChange={(e) => setVehicleFilter(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+                  <option value="all">All Vehicles</option>
+                  {uniqueVehicles.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <select value={driverFilter} onChange={(e) => setDriverFilter(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+                  <option value="all">All Drivers</option>
+                  {uniqueDrivers.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
                 <button onClick={handleExport} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700">
                   ↓ Export

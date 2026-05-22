@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { notify } = require('../services/notifyAgent');
 
 const router = express.Router();
 
@@ -105,6 +106,10 @@ router.post('/trips/:id/confirm', authenticate, requireRole('agent'), async (req
       [newStatus, req.params.id]
     );
 
+    if (newStatus === 'rejected') {
+      await notify(req.user.id, 'Trip Rejected', 'You rejected the admin\'s quoted price. You can submit a new trip request.', 'trip_rejected', req.params.id);
+    }
+
     res.json({ message: `Trip ${newStatus}`, trip: rows[0] });
   } catch (err) {
     console.error(err);
@@ -129,6 +134,30 @@ router.put('/profile', authenticate, requireRole('agent'), async (req, res) => {
     res.json({ message: 'Profile updated', user: rows[0] });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/agent/notifications
+router.get('/notifications', authenticate, requireRole('agent'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
+      [req.user.id]
+    );
+    const unread = rows.filter((n) => !n.is_read).length;
+    res.json({ notifications: rows, unread_count: unread });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/agent/notifications/read-all
+router.post('/notifications/read-all', authenticate, requireRole('agent'), async (req, res) => {
+  try {
+    await pool.query('UPDATE notifications SET is_read = TRUE WHERE user_id = $1', [req.user.id]);
+    res.json({ message: 'Marked all as read' });
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
