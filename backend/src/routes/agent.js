@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { notify } = require('../services/notifyAgent');
+const { sendAdminAlert } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -76,7 +77,11 @@ router.post('/trips/:id/counter', authenticate, requireRole('agent'), async (req
        status = 'pending', agent_repriced = TRUE, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [new_price, req.params.id]
     );
-    res.json({ message: 'Counter price sent. Admin will review.', trip: rows[0] });
+    const trip = rows[0];
+    const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
+    const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
+    await sendAdminAlert(req.user.name, 'counter', route, new_price);
+    res.json({ message: 'Counter price sent. Admin will review.', trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -105,12 +110,18 @@ router.post('/trips/:id/confirm', authenticate, requireRole('agent'), async (req
       'UPDATE trips SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
       [newStatus, req.params.id]
     );
+    const trip = rows[0];
+    const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
+    const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
 
     if (newStatus === 'rejected') {
       await notify(req.user.id, 'Trip Rejected', 'You rejected the admin\'s quoted price. You can submit a new trip request.', 'trip_rejected', req.params.id);
     }
 
-    res.json({ message: `Trip ${newStatus}`, trip: rows[0] });
+    // Notify admin via WhatsApp
+    await sendAdminAlert(req.user.name, action, route, trip.admin_final_price);
+
+    res.json({ message: `Trip ${newStatus}`, trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });

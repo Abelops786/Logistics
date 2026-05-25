@@ -36,28 +36,40 @@ class _LedgerScreenState extends State<LedgerScreen> {
         builder: (context, provider, _) {
           final summary = provider.ledgerSummary;
           final trips = provider.trips;
+          // ListView.builder renders only visible items — critical for older phones
           return RefreshIndicator(
             onRefresh: provider.loadLedger,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
+            child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (summary != null) _buildSummaryCards(summary),
-                  const SizedBox(height: 20),
-                  const Text('Trip History', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 12),
-                  if (trips.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(40),
-                      alignment: Alignment.center,
-                      child: Text('No trips yet', style: TextStyle(color: Colors.grey.shade400)),
-                    )
-                  else
-                    ...trips.map((t) => _tripCard(context, t, provider)),
-                ],
-              ),
+              // slots: 0=summary, 1=header, 2..N=trips (or empty state at slot 2)
+              itemCount: trips.isEmpty ? 3 : trips.length + 2,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return summary != null
+                      ? _buildSummaryCards(summary)
+                      : const SizedBox.shrink();
+                }
+                if (index == 1) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 20, bottom: 12),
+                    child: Text('Trip History',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  );
+                }
+                if (trips.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(40),
+                    alignment: Alignment.center,
+                    child: Text('No trips yet',
+                        style: TextStyle(color: Colors.grey.shade400)),
+                  );
+                }
+                final trip = trips[index - 2];
+                // RepaintBoundary isolates each card's repaint layer
+                return RepaintBoundary(
+                  child: _tripCard(context, trip, provider),
+                );
+              },
             ),
           );
         },

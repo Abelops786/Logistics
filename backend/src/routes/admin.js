@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { buildTripWhereClause, stripCashFieldsArray } = require('../middleware/tripFilter');
-const { sendWhatsApp, sendQuotedNotification } = require('../services/notificationService');
+const { sendWhatsApp, sendQuotedNotification, sendPenaltyNotification, sendCompletedNotification, sendNotCompleteNotification } = require('../services/notificationService');
 const { notify } = require('../services/notifyAgent');
 
 const router = express.Router();
@@ -411,11 +411,17 @@ router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
     );
     if (!rows.length) return res.status(400).json({ message: 'Trip not found or not in approved status' });
 
-    // Notify agent
-    const agentRow = await pool.query('SELECT name FROM users WHERE id = $1', [rows[0].agent_id]);
-    await notify(rows[0].agent_id, 'Trip Completed ✅', `Your trip has been marked as completed.${notes ? ' Note: ' + notes : ''}`, 'trip_approved', rows[0].id);
+    const trip = rows[0];
+    const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
+    const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
 
-    res.json({ message: 'Trip completed', trip: rows[0] });
+    const agentRow = await pool.query('SELECT phone FROM users WHERE id = $1', [trip.agent_id]);
+    await notify(trip.agent_id, 'Trip Completed ✅', `Your trip has been marked as completed.${notes ? ' Note: ' + notes : ''}`, 'trip_approved', trip.id);
+    if (agentRow.rows.length) {
+      await sendCompletedNotification(agentRow.rows[0].phone, route, notes);
+    }
+
+    res.json({ message: 'Trip completed', trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -435,8 +441,17 @@ router.post('/trips/:id/not-complete', ...isAdmin, async (req, res) => {
     );
     if (!rows.length) return res.status(400).json({ message: 'Trip not found or not in approved status' });
 
-    await notify(rows[0].agent_id, 'Trip Not Completed ❌', `Reason: ${reason}`, 'trip_rejected', rows[0].id);
-    res.json({ message: 'Trip marked as not complete', trip: rows[0] });
+    const trip = rows[0];
+    const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
+    const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
+
+    const agentRow = await pool.query('SELECT phone FROM users WHERE id = $1', [trip.agent_id]);
+    await notify(trip.agent_id, 'Trip Not Completed ❌', `Reason: ${reason}`, 'trip_rejected', trip.id);
+    if (agentRow.rows.length) {
+      await sendNotCompleteNotification(agentRow.rows[0].phone, route, reason);
+    }
+
+    res.json({ message: 'Trip marked as not complete', trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -478,13 +493,7 @@ router.post('/trips/:id/penalty', ...isAdmin, async (req, res) => {
     // WhatsApp to agent
     const agentRow = await pool.query('SELECT name, phone FROM users WHERE id = $1', [trip.agent_id]);
     if (agentRow.rows.length) {
-      await sendWhatsApp(agentRow.rows[0].phone, [
-        agentRow.rows[0].name,
-        route,
-        String(trip.total_amount),
-        `⚠️ Detention Penalty: PKR ${Number(penalty_amount).toLocaleString()} added. New total: PKR ${Number(trip.total_amount).toLocaleString()}`,
-        '',
-      ]);
+      await sendPenaltyNotification(agentRow.rows[0].phone, agentRow.rows[0].name, route, penalty_amount, trip.total_amount);
     }
 
     res.json({ message: 'Penalty applied and agent notified', trip });

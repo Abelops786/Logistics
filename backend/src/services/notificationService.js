@@ -1,90 +1,103 @@
 // Notification engine — Meta WhatsApp Cloud API v25.0
-// Positional variables: [AgentName, Route, Price, PlateNumber, DriverName]
-// Same vars map to Meta template {{1}}, {{2}}, {{3}}, {{4}}, {{5}}
 const axios = require('axios');
 
-const META_TOKEN = process.env.WHATSAPP_TOKEN;
-const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_ID;
 const API_VERSION = 'v25.0';
-const META_URL = `https://graph.facebook.com/${API_VERSION}/${PHONE_NUMBER_ID}/messages`;
 
-async function sendWhatsApp(toPhone, variables) {
-  const [agentName, route, price, plateNumber, driverName] = variables;
+function _getConfig() {
+  return {
+    token: process.env.WHATSAPP_TOKEN,
+    phoneId: process.env.WHATSAPP_PHONE_ID,
+  };
+}
 
-  if (!META_TOKEN || !PHONE_NUMBER_ID) {
-    console.log('[WhatsApp Stub]', toPhone, variables);
+// Pakistani numbers: 03001234567 → 923001234567, already 92xxx kept as-is
+function _cleanPhone(phone) {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('0')) return '92' + digits.slice(1);
+  return digits;
+}
+
+async function _send(toPhone, messageBody) {
+  const { token, phoneId } = _getConfig();
+  if (!token || !phoneId) {
+    console.log('[WhatsApp Stub — set WHATSAPP_TOKEN and WHATSAPP_PHONE_ID in Railway]', toPhone);
     return;
   }
-
-  // Clean phone number — Meta requires international format without +
-  const cleanPhone = toPhone.replace(/\D/g, '');
-
-  let body;
-
-  if (plateNumber && driverName && price) {
-    // Trigger 2: Trip approved → agent
-    body = {
-      messaging_product: 'whatsapp',
-      to: cleanPhone,
-      type: 'text',
-      text: {
-        body: `*Abel Logistics* ✅\n\nTrip Approved!\n\n🚛 Vehicle: ${plateNumber}\n👤 Driver: ${driverName}\n💰 Final Price: PKR ${Number(price).toLocaleString()}\n\nRoute: ${route}`,
-      },
-    };
-  } else if (route && route.includes('approved')) {
-    // Account approved notification
-    body = {
-      messaging_product: 'whatsapp',
-      to: cleanPhone,
-      type: 'text',
-      text: {
-        body: `*Abel Logistics* ✅\n\nYour agent account has been approved! You can now log in and submit trip requests.`,
-      },
-    };
-  } else {
-    // Trigger 1: New booking request → admin
-    body = {
-      messaging_product: 'whatsapp',
-      to: cleanPhone,
-      type: 'text',
-      text: {
-        body: `*Abel Logistics* 🚛\n\nNew trip request from Agent *${agentName}*\n\nRoute: ${route}`,
-      },
-    };
-  }
-
+  const url = `https://graph.facebook.com/${API_VERSION}/${phoneId}/messages`;
   try {
-    const res = await axios.post(META_URL, body, {
-      headers: {
-        Authorization: `Bearer ${META_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
+    const res = await axios.post(url, {
+      messaging_product: 'whatsapp',
+      to: _cleanPhone(toPhone),
+      type: 'text',
+      text: { body: messageBody },
+    }, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
     console.log('WhatsApp sent:', res.data?.messages?.[0]?.id);
   } catch (err) {
-    const errData = err.response?.data?.error;
-    console.error('WhatsApp send failed:', errData?.message || err.message);
+    console.error('WhatsApp send failed:', err.response?.data?.error?.message || err.message);
   }
 }
 
-// Quoted price notification (separate trigger)
-async function sendQuotedNotification(toPhone, agentName, route, price) {
-  if (!META_TOKEN || !PHONE_NUMBER_ID) return;
-  const cleanPhone = toPhone.replace(/\D/g, '');
-  try {
-    await axios.post(META_URL, {
-      messaging_product: 'whatsapp',
-      to: cleanPhone,
-      type: 'text',
-      text: {
-        body: `*Abel Logistics* ⏳\n\nAdmin has quoted a price for your trip.\n\nRoute: ${route}\n💰 Quoted Price: PKR ${Number(price).toLocaleString()}\n\nPlease open the Abel Logistics app to Accept, Reject, or Re-Price.`,
-      },
-    }, {
-      headers: { Authorization: `Bearer ${META_TOKEN}`, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    console.error('WhatsApp quoted notification failed:', err.response?.data?.error?.message || err.message);
+// New booking request → admin
+async function sendWhatsApp(toPhone, variables) {
+  const [agentName, route, price, plateNumber, driverName] = variables;
+
+  let text;
+  if (plateNumber && driverName && price) {
+    // Trip approved → agent
+    text = `*Abel Logistics* ✅\n\nTrip Approved!\n\n🚛 Vehicle: ${plateNumber}\n👤 Driver: ${driverName}\n💰 Final Price: PKR ${Number(price).toLocaleString()}\n\nRoute: ${route}`;
+  } else if (!price && !plateNumber) {
+    // Account approved → agent (route contains a descriptive message here)
+    text = `*Abel Logistics* ✅\n\nYour agent account has been approved! You can now log in and submit trip requests.`;
+  } else {
+    // New booking → admin
+    text = `*Abel Logistics* 🚛\n\nNew trip request from Agent *${agentName}*\n\nRoute: ${route}`;
   }
+
+  await _send(toPhone, text);
+}
+
+// Quoted price → agent
+async function sendQuotedNotification(toPhone, agentName, route, price) {
+  await _send(toPhone,
+    `*Abel Logistics* ⏳\n\nAdmin has quoted a price for your trip.\n\nRoute: ${route}\n💰 Quoted Price: PKR ${Number(price).toLocaleString()}\n\nPlease open the app to Accept, Reject, or Re-Price.`
+  );
+}
+
+// Detention penalty → agent
+async function sendPenaltyNotification(toPhone, agentName, route, penaltyAmount, newTotal) {
+  await _send(toPhone,
+    `*Abel Logistics* ⚠️\n\nA detention penalty has been added to your trip.\n\nRoute: ${route}\n⚠️ Penalty: PKR ${Number(penaltyAmount).toLocaleString()}\n💰 New Total: PKR ${Number(newTotal).toLocaleString()}`
+  );
+}
+
+// Trip completed → agent
+async function sendCompletedNotification(toPhone, route, notes) {
+  await _send(toPhone,
+    `*Abel Logistics* ✅\n\nYour trip has been marked as Completed!\n\nRoute: ${route}${notes ? `\n📝 Note: ${notes}` : ''}`
+  );
+}
+
+// Trip not complete → agent
+async function sendNotCompleteNotification(toPhone, route, reason) {
+  await _send(toPhone,
+    `*Abel Logistics* ❌\n\nYour trip has been marked as Not Completed.\n\nRoute: ${route}\n📋 Reason: ${reason}`
+  );
+}
+
+// Agent action (accept / reject / counter) → admin
+async function sendAdminAlert(agentName, action, route, price) {
+  const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER;
+  if (!adminPhone) return;
+  const actionText = {
+    accept: `✅ *${agentName}* accepted the quoted price of PKR ${Number(price).toLocaleString()}`,
+    reject: `❌ *${agentName}* rejected the quoted price`,
+    counter: `🔄 *${agentName}* sent a counter price of PKR ${Number(price).toLocaleString()}`,
+  }[action] || `*${agentName}* updated a trip`;
+  await _send(adminPhone,
+    `*Abel Logistics* 🔔\n\n${actionText}\n\nRoute: ${route}\n\nPlease open the dashboard.`
+  );
 }
 
 async function sendEmail(to, subject, html) {
@@ -103,4 +116,4 @@ async function sendEmail(to, subject, html) {
   }
 }
 
-module.exports = { sendWhatsApp, sendQuotedNotification, sendEmail };
+module.exports = { sendWhatsApp, sendQuotedNotification, sendPenaltyNotification, sendCompletedNotification, sendNotCompleteNotification, sendAdminAlert, sendEmail };

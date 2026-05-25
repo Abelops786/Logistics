@@ -89,7 +89,8 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ],
       ),
-      body: _screens[_tab],
+      // IndexedStack keeps both screens alive — no re-fetch or scroll loss on tab switch
+      body: IndexedStack(index: _tab, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
