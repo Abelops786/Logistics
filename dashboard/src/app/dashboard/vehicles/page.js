@@ -91,8 +91,8 @@ export default function VehiclesPage() {
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Plate</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Type</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Rate/KM</th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">Assigned Driver</th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">Assign Driver</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-medium">Drivers</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-medium">Assign Primary</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">History</th>
               </tr>
             </thead>
@@ -103,20 +103,25 @@ export default function VehiclesPage() {
                   <td className="px-4 py-3 text-gray-600">{v.container_type.replace(/_/g, ' ')}</td>
                   <td className="px-4 py-3 text-gray-600">Rs. {v.rate_per_km}</td>
                   <td className="px-4 py-3">
-                    {v.driver_photo ? (
-                      <div className="flex items-center gap-2">
-                        <img src={v.driver_photo} alt={v.driver_name} className="w-8 h-8 rounded-full object-cover border" />
-                        <div>
-                          <p className="font-medium text-gray-800 text-xs">{v.driver_name}</p>
-                          <p className="text-gray-400 text-xs">{v.driver_phone}</p>
+                    <div className="space-y-1">
+                      {drivers.filter((d) => d.vehicle_id === v.id).length > 0 ? (
+                        drivers.filter((d) => d.vehicle_id === v.id).map((d) => (
+                          <div key={d.id} className="flex items-center gap-1.5">
+                            {d.id === v.assigned_driver_id && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-1 rounded font-medium">Primary</span>
+                            )}
+                            <span className="text-xs font-medium text-gray-800">{d.name}</span>
+                            <span className="text-xs text-gray-400">{d.phone}</span>
+                          </div>
+                        ))
+                      ) : v.driver_name ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs bg-blue-100 text-blue-700 px-1 rounded font-medium">Primary</span>
+                          <span className="text-xs font-medium text-gray-800">{v.driver_name}</span>
+                          <span className="text-xs text-gray-400">{v.driver_phone}</span>
                         </div>
-                      </div>
-                    ) : v.driver_name ? (
-                      <div>
-                        <p className="font-medium text-gray-800 text-xs">{v.driver_name}</p>
-                        <p className="text-gray-400 text-xs">{v.driver_phone}</p>
-                      </div>
-                    ) : <span className="text-gray-400 text-xs">None assigned</span>}
+                      ) : <span className="text-gray-400 text-xs">None assigned</span>}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <select

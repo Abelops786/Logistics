@@ -240,7 +240,7 @@ router.put('/agents/:id', ...isAdmin, async (req, res) => {
 router.get('/drivers', ...isAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT d.*, v.plate_number AS assigned_vehicle
+      SELECT d.*, v.plate_number AS assigned_vehicle, d.vehicle_id
       FROM drivers d
       LEFT JOIN vehicles v ON v.assigned_driver_id = d.id
       ORDER BY d.name ASC
