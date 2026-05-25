@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Ayazz Memon Pinger — Admin',
+  title: 'R Transport — Admin',
   icons: {
     icon: [{ url: '/favicon.png', type: 'image/png' }],
     shortcut: '/favicon.png',
