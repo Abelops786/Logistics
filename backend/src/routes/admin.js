@@ -336,6 +336,35 @@ router.get('/vehicles', ...isAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/vehicles/:id/add-driver — link a driver to this vehicle
+router.post('/vehicles/:id/add-driver', ...isAdmin, async (req, res) => {
+  const { driver_id, set_primary } = req.body;
+  if (!driver_id) return res.status(400).json({ message: 'driver_id required' });
+  try {
+    await pool.query('UPDATE drivers SET vehicle_id = $1 WHERE id = $2', [req.params.id, driver_id]);
+    if (set_primary) {
+      await pool.query('UPDATE vehicles SET assigned_driver_id = $1, updated_at = NOW() WHERE id = $2', [driver_id, req.params.id]);
+    }
+    res.json({ message: 'Driver linked to vehicle' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// DELETE /api/admin/vehicles/:id/remove-driver/:driverId — unlink a driver
+router.delete('/vehicles/:id/remove-driver/:driverId', ...isAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE drivers SET vehicle_id = NULL WHERE id = $1 AND vehicle_id = $2', [req.params.driverId, req.params.id]);
+    // If this was the primary driver, clear assigned_driver_id
+    await pool.query('UPDATE vehicles SET assigned_driver_id = NULL WHERE id = $1 AND assigned_driver_id = $2', [req.params.id, req.params.driverId]);
+    res.json({ message: 'Driver removed from vehicle' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // PUT /api/admin/vehicles/:id/assign-driver
 router.put('/vehicles/:id/assign-driver', ...isAdmin, async (req, res) => {
   const { driver_id } = req.body;

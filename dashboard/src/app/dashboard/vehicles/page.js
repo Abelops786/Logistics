@@ -1,8 +1,137 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
 import { exportCSV } from '../../../lib/exportCsv';
+
+function ManageDriversModal({ vehicle, allDrivers, onClose, onSaved }) {
+  const [search, setSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [saving, setSaving] = useState('');
+  const inputRef = useRef(null);
+
+  const linked = allDrivers.filter((d) => d.vehicle_id === vehicle.id);
+  const unlinked = allDrivers.filter((d) => d.vehicle_id !== vehicle.id);
+  const filtered = unlinked.filter((d) =>
+    d.name.toLowerCase().includes(search.toLowerCase()) ||
+    d.phone.includes(search)
+  );
+
+  async function addDriver(driver) {
+    setSaving('add_' + driver.id);
+    try {
+      await api.post(`/api/admin/vehicles/${vehicle.id}/add-driver`, {
+        driver_id: driver.id,
+        set_primary: linked.length === 0,
+      });
+      setSearch('');
+      setShowDropdown(false);
+      onSaved();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed');
+    } finally { setSaving(''); }
+  }
+
+  async function removeDriver(driver) {
+    if (!confirm(`Remove ${driver.name} from this vehicle?`)) return;
+    setSaving('remove_' + driver.id);
+    try {
+      await api.delete(`/api/admin/vehicles/${vehicle.id}/remove-driver/${driver.id}`);
+      onSaved();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed');
+    } finally { setSaving(''); }
+  }
+
+  async function setPrimary(driver) {
+    setSaving('primary_' + driver.id);
+    try {
+      await api.put(`/api/admin/vehicles/${vehicle.id}/assign-driver`, { driver_id: driver.id });
+      onSaved();
+    } catch (err) {
+      alert('Failed');
+    } finally { setSaving(''); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800">Drivers — {vehicle.plate_number}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+        </div>
+
+        {/* Current linked drivers */}
+        <div className="mb-4 space-y-2">
+          {linked.length === 0 && (
+            <p className="text-sm text-gray-400">No drivers linked yet.</p>
+          )}
+          {linked.map((d) => (
+            <div key={d.id} className="flex items-center justify-between bg-gray-50 rounded px-3 py-2">
+              <div className="flex items-center gap-2">
+                {d.id === vehicle.assigned_driver_id && (
+                  <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Primary</span>
+                )}
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{d.name}</p>
+                  <p className="text-xs text-gray-400">{d.phone} · {d.status}</p>
+                </div>
+              </div>
+              <div className="flex gap-1.5">
+                {d.id !== vehicle.assigned_driver_id && (
+                  <button
+                    onClick={() => setPrimary(d)}
+                    disabled={!!saving}
+                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  >{saving === 'primary_' + d.id ? '...' : 'Set Primary'}</button>
+                )}
+                <button
+                  onClick={() => removeDriver(d)}
+                  disabled={!!saving}
+                  className="text-xs px-2 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 disabled:opacity-50"
+                >{saving === 'remove_' + d.id ? '...' : '✕'}</button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Searchable add driver */}
+        <div className="relative">
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
+            onFocus={() => setShowDropdown(true)}
+            placeholder="Search driver by name or phone..."
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          />
+          {showDropdown && search && (
+            <div className="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 max-h-52 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-gray-400">No drivers found</div>
+              ) : filtered.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => addDriver(d)}
+                  disabled={!!saving}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex justify-between items-center"
+                >
+                  <span className="font-medium text-gray-800">{d.name}</span>
+                  <span className="text-xs text-gray-400">{d.phone}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mt-1">Type to search and click to add a driver</p>
+
+        <button onClick={onClose} className="mt-4 w-full border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState([]);
@@ -10,6 +139,7 @@ export default function VehiclesPage() {
   const [form, setForm] = useState({ plate_number: '', container_type: '50ft_22_wheeler', rate_per_km: '' });
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [manageVehicle, setManageVehicle] = useState(null);
 
   async function load() {
     try {
@@ -34,12 +164,13 @@ export default function VehiclesPage() {
     } finally { setAdding(false); }
   }
 
-  async function assignDriver(vehicleId, driverId) {
-    try {
-      await api.put(`/api/admin/vehicles/${vehicleId}/assign-driver`, { driver_id: driverId || null });
-      load();
-    } catch (err) {
-      alert('Failed to assign driver');
+  async function handleSaved() {
+    await load();
+    // refresh manageVehicle with updated data
+    if (manageVehicle) {
+      const vRes = await api.get('/api/admin/vehicles');
+      const updated = vRes.data.find((v) => v.id === manageVehicle.id);
+      if (updated) setManageVehicle(updated);
     }
   }
 
@@ -51,12 +182,12 @@ export default function VehiclesPage() {
           onClick={() => {
             const sorted = [...vehicles].sort((a, b) => a.container_type.localeCompare(b.container_type) || a.plate_number.localeCompare(b.plate_number));
             const rows = sorted.map((v) => ({
-              'Container Type': v.container_type === '50ft_22_wheeler' ? '50ft 22-Wheeler' : '47ft Jumbo',
+              'Container Type': v.container_type.replace(/_/g, ' '),
               'Plate Number': v.plate_number,
               'Rate Per KM (PKR)': v.rate_per_km || '',
-              'Assigned Driver': v.driver_name || '— None —',
+              'Primary Driver': v.driver_name || '— None —',
               'Driver Phone': v.driver_phone || '',
-              'Driver Status': v.driver_status || '',
+              'All Drivers': drivers.filter((d) => d.vehicle_id === v.id).map((d) => d.name).join(', ') || v.driver_name || '',
             }));
             exportCSV(rows, 'rtransport_vehicles_drivers');
           }}
@@ -73,6 +204,8 @@ export default function VehiclesPage() {
             className="border border-gray-300 rounded px-3 py-2 text-sm">
             <option value="50ft_22_wheeler">50ft 22-Wheeler</option>
             <option value="47ft_22_wheeler_jumbo">47ft Jumbo</option>
+            <option value="40ft_trailer">40ft Trailer</option>
+            <option value="canter">Canter</option>
           </select>
           <input value={form.rate_per_km} onChange={(e) => setForm({ ...form, rate_per_km: e.target.value })}
             placeholder="Rate/KM (PKR)" type="number" className="border border-gray-300 rounded px-3 py-2 text-sm w-36" />
@@ -92,57 +225,59 @@ export default function VehiclesPage() {
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Type</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Rate/KM</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Drivers</th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">Assign Primary</th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">History</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {vehicles.map((v) => (
-                <tr key={v.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{v.plate_number}</td>
-                  <td className="px-4 py-3 text-gray-600">{v.container_type.replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3 text-gray-600">Rs. {v.rate_per_km}</td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      {drivers.filter((d) => d.vehicle_id === v.id).length > 0 ? (
-                        drivers.filter((d) => d.vehicle_id === v.id).map((d) => (
+              {vehicles.map((v) => {
+                const linked = drivers.filter((d) => d.vehicle_id === v.id);
+                return (
+                  <tr key={v.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-800">{v.plate_number}</td>
+                    <td className="px-4 py-3 text-gray-600">{v.container_type.replace(/_/g, ' ')}</td>
+                    <td className="px-4 py-3 text-gray-600">Rs. {v.rate_per_km}</td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-0.5">
+                        {linked.length > 0 ? linked.map((d) => (
                           <div key={d.id} className="flex items-center gap-1.5">
                             {d.id === v.assigned_driver_id && (
-                              <span className="text-xs bg-blue-100 text-blue-700 px-1 rounded font-medium">Primary</span>
+                              <span className="text-xs bg-blue-100 text-blue-700 px-1 rounded font-medium">P</span>
                             )}
                             <span className="text-xs font-medium text-gray-800">{d.name}</span>
                             <span className="text-xs text-gray-400">{d.phone}</span>
                           </div>
-                        ))
-                      ) : v.driver_name ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs bg-blue-100 text-blue-700 px-1 rounded font-medium">Primary</span>
-                          <span className="text-xs font-medium text-gray-800">{v.driver_name}</span>
-                          <span className="text-xs text-gray-400">{v.driver_phone}</span>
-                        </div>
-                      ) : <span className="text-gray-400 text-xs">None assigned</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={v.assigned_driver_id || ''}
-                      onChange={(e) => assignDriver(v.id, e.target.value)}
-                      className="border border-gray-300 rounded px-2 py-1 text-xs"
-                    >
-                      <option value="">— Unassign —</option>
-                      {drivers.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name} ({d.status})</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3">
-                    <a href={`/dashboard/vehicles/${v.id}`} className="text-blue-600 hover:underline text-xs font-medium">View History</a>
-                  </td>
-                </tr>
-              ))}
+                        )) : v.driver_name ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs bg-blue-100 text-blue-700 px-1 rounded font-medium">P</span>
+                            <span className="text-xs font-medium text-gray-800">{v.driver_name}</span>
+                          </div>
+                        ) : <span className="text-xs text-gray-400">None</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setManageVehicle(v)}
+                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                        >Manage Drivers</button>
+                        <a href={`/dashboard/vehicles/${v.id}`} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200">History</a>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+      )}
+
+      {manageVehicle && (
+        <ManageDriversModal
+          vehicle={manageVehicle}
+          allDrivers={drivers}
+          onClose={() => setManageVehicle(null)}
+          onSaved={handleSaved}
+        />
       )}
     </Layout>
   );
