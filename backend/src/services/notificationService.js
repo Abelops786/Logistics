@@ -17,6 +17,8 @@ function _cleanPhone(phone) {
   return digits;
 }
 
+const TEMPLATE_NAME = process.env.WHATSAPP_TEMPLATE_NAME || 'abel_logistics_alert';
+
 async function _send(toPhone, messageBody) {
   const { token, phoneId } = _getConfig();
   if (!token || !phoneId) {
@@ -28,8 +30,17 @@ async function _send(toPhone, messageBody) {
     const res = await axios.post(url, {
       messaging_product: 'whatsapp',
       to: _cleanPhone(toPhone),
-      type: 'text',
-      text: { body: messageBody },
+      type: 'template',
+      template: {
+        name: TEMPLATE_NAME,
+        language: { code: 'en' },
+        components: [
+          {
+            type: 'body',
+            parameters: [{ type: 'text', text: messageBody }],
+          },
+        ],
+      },
     }, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
