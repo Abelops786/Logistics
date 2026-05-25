@@ -43,8 +43,19 @@ app.get('/test-whatsapp', async (req, res) => {
       {
         messaging_product: 'whatsapp',
         to,
-        type: 'text',
-        text: { body: `Abel Logistics ✅ WhatsApp test message. Connection is working!` },
+        type: 'template',
+        template: {
+          name: 'new_trip_to_admin',
+          language: { code: 'en' },
+          components: [{
+            type: 'body',
+            parameters: [
+              { type: 'text', text: 'Test Agent' },
+              { type: 'text', text: '03001234567' },
+              { type: 'text', text: 'Karachi to Lahore' },
+            ],
+          }],
+        },
       },
       { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
     );
