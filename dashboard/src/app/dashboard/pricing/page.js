@@ -4,8 +4,8 @@ import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
 
 const CONTAINERS = [
-  { key: '50ft_22_wheeler', label: '50ft 22-Wheeler Container' },
-  { key: '47ft_22_wheeler_jumbo', label: '47ft 22-Wheeler Jumbo Container' },
+  { key: '50ft_22_wheeler', label: '50ft 14-Wheeler Container' },
+  { key: '47ft_22_wheeler_jumbo', label: '47ft 14-Wheeler Jumbo Container' },
 ];
 
 export default function PricingPage() {

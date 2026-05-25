@@ -319,7 +319,7 @@ export default function VehiclesPage() {
                 return (
                   <tr key={v.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800">{v.plate_number}</td>
-                    <td className="px-4 py-3 text-gray-600">{v.container_type.replace(/_/g, ' ')}</td>
+                    <td className="px-4 py-3 text-gray-600">{TYPE_LABELS[v.container_type] || v.container_type.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3 text-gray-600">Rs. {v.rate_per_km}</td>
                     <td className="px-4 py-3">
                       <div className="space-y-0.5">
