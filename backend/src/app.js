@@ -58,16 +58,9 @@ app.get('/test-whatsapp', async (req, res) => {
     }
   }
 
-  const results = await Promise.all([
-    send('new_trip_to_admin',                  ['Asher Sajjad', '03145686872', 'Karachi to Lahore']).then(r => ({ template: 'new_trip_to_admin', ...r })),
-    send('template_2__abel_account_approved',  []).then(r => ({ template: 'template_2__abel_account_approved', ...r })),
-    send('template_3__abel_trip_quoted',        ['Karachi to Lahore', '45,000']).then(r => ({ template: 'template_3__abel_trip_quoted', ...r })),
-    send('template_4__abel_trip_approved',      ['ABC-1234', 'Muhammad Usman', '45,000', 'Karachi to Lahore']).then(r => ({ template: 'template_4__abel_trip_approved', ...r })),
-    send('template_5__abel_trip_completed',     ['Karachi to Lahore']).then(r => ({ template: 'template_5__abel_trip_completed', ...r })),
-    send('template_6__abel_trip_not_complete',  ['Karachi to Lahore', 'Vehicle broke down']).then(r => ({ template: 'template_6__abel_trip_not_complete', ...r })),
-    send('template_7__abel_detention_penalty',  ['Karachi to Lahore', '5,000', '50,000']).then(r => ({ template: 'template_7__abel_detention_penalty', ...r })),
-    send('template_8__abel_agent_action',       ['Asher Sajjad', '03145686872', '45,000', 'Karachi to Lahore']).then(r => ({ template: 'template_8__abel_agent_action', ...r })),
-  ]);
+  const results = [
+    await send('template_4__abel_trip_approved', ['ABC-1234', 'Muhammad Usman', '45,000', 'Karachi to Lahore']).then(r => ({ template: 'template_4__abel_trip_approved', ...r })),
+  ];
 
   res.json({ results });
 });
