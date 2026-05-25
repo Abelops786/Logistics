@@ -85,7 +85,15 @@ class _HomeShellState extends State<HomeShell> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => context.read<AppProvider>().logout(),
+            onPressed: () async {
+              await context.read<AppProvider>().logout();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                  (route) => false,
+                );
+              }
+            },
           ),
         ],
       ),
