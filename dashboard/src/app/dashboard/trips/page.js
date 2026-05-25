@@ -218,17 +218,22 @@ function NotCompleteModal({ trip, onClose, onDone }) {
 function TripDetailsModal({ trip, onClose, onDone }) {
   const [penalty, setPenalty] = useState('');
   const [applying, setApplying] = useState(false);
+  const [penaltyError, setPenaltyError] = useState('');
   const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
   const total = (parseFloat(trip.admin_final_price) || 0) + (parseFloat(trip.detention_penalty) || 0);
 
   async function applyPenalty(e) {
     e.preventDefault();
-    if (!penalty || isNaN(penalty) || parseFloat(penalty) <= 0) return alert('Enter a valid penalty amount');
+    setPenaltyError('');
+    if (!penalty || isNaN(penalty) || parseFloat(penalty) <= 0) {
+      setPenaltyError('Please enter a valid penalty amount greater than 0');
+      return;
+    }
     setApplying(true);
     try {
       await api.post(`/api/admin/trips/${trip.id}/penalty`, { penalty_amount: parseFloat(penalty) });
       onDone(); onClose();
-    } catch (err) { alert(err.response?.data?.message || 'Failed to apply penalty'); }
+    } catch (err) { setPenaltyError(err.response?.data?.message || 'Failed to apply penalty'); }
     finally { setApplying(false); }
   }
 
@@ -276,20 +281,27 @@ function TripDetailsModal({ trip, onClose, onDone }) {
           {trip.not_complete_reason && <Row label="Not Complete Reason" value={trip.not_complete_reason} color="text-red-600" />}
         </div>
 
-        {/* Detention Penalty */}
-        {trip.status === 'approved' || trip.status === 'completed' ? (
+        {/* Detention Penalty — approved trips only; completed = view only */}
+        {trip.status === 'approved' ? (
           <div className="border border-orange-200 bg-orange-50 rounded-lg p-4">
             <p className="text-sm font-semibold text-orange-800 mb-1">⚠️ Detention Penalty</p>
             <p className="text-xs text-orange-600 mb-3">Adding a penalty will update the total amount and send a WhatsApp notification to the agent.</p>
-            <form onSubmit={applyPenalty} className="flex gap-3">
-              <input type="number" value={penalty} onChange={(e) => setPenalty(e.target.value)}
-                placeholder="Penalty Amount (PKR)" min="1"
-                className="flex-1 border border-orange-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
-              <button type="submit" disabled={applying}
-                className="px-4 py-2 bg-orange-600 text-white rounded text-sm font-medium hover:bg-orange-700 disabled:opacity-50 whitespace-nowrap">
-                {applying ? 'Applying...' : 'Apply Penalty'}
-              </button>
+            <form onSubmit={applyPenalty} className="flex flex-col gap-2">
+              <div className="flex gap-3">
+                <input type="number" value={penalty} onChange={(e) => { setPenalty(e.target.value); setPenaltyError(''); }}
+                  placeholder="Penalty Amount (PKR)" min="1"
+                  className="flex-1 border border-orange-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                <button type="submit" disabled={applying}
+                  className="px-4 py-2 bg-orange-600 text-white rounded text-sm font-medium hover:bg-orange-700 disabled:opacity-50 whitespace-nowrap">
+                  {applying ? 'Applying...' : 'Apply Penalty'}
+                </button>
+              </div>
+              {penaltyError && <p className="text-xs text-red-600">{penaltyError}</p>}
             </form>
+          </div>
+        ) : trip.status === 'completed' ? (
+          <div className="mt-2 p-3 bg-blue-50 rounded text-xs text-blue-700 text-center border border-blue-200">
+            ✓ This trip is <strong>Completed</strong> — view only, no edits allowed.
           </div>
         ) : null}
       </div>

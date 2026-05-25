@@ -240,6 +240,40 @@ router.put('/drivers/:id', ...isAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/vehicles/:id/history
+router.get('/vehicles/:id/history', ...isAdmin, async (req, res) => {
+  try {
+    const vehicleRow = await pool.query(`
+      SELECT v.*, d.name AS driver_name, d.phone AS driver_phone, d.photo_base64 AS driver_photo
+      FROM vehicles v LEFT JOIN drivers d ON d.id = v.assigned_driver_id
+      WHERE v.id = $1
+    `, [req.params.id]);
+    if (!vehicleRow.rows.length) return res.status(404).json({ message: 'Vehicle not found' });
+
+    const statsRow = await pool.query(`
+      SELECT
+        COUNT(*) AS total_trips,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed_trips,
+        COUNT(*) FILTER (WHERE status = 'approved') AS in_progress,
+        COUNT(*) FILTER (WHERE status IN ('pending','quoted')) AS pending_trips,
+        COUNT(*) FILTER (WHERE status = 'rejected') AS rejected_trips,
+        COALESCE(SUM(admin_final_price + COALESCE(detention_penalty,0)) FILTER (WHERE status IN ('approved','completed')), 0) AS total_revenue
+      FROM trips WHERE vehicle_id = $1
+    `, [req.params.id]);
+
+    const tripsRow = await pool.query(`
+      SELECT t.*, u.name AS agent_name, u.phone AS agent_phone
+      FROM trips t LEFT JOIN users u ON u.id = t.agent_id
+      WHERE t.vehicle_id = $1 ORDER BY t.created_at DESC
+    `, [req.params.id]);
+
+    res.json({ vehicle: vehicleRow.rows[0], stats: statsRow.rows[0], trips: tripsRow.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /api/admin/vehicles
 router.get('/vehicles', ...isAdmin, async (req, res) => {
   try {

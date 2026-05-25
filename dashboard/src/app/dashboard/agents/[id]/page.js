@@ -5,7 +5,7 @@ import Layout from '../../../../components/Layout';
 import api from '../../../../lib/api';
 import { exportCSV } from '../../../../lib/exportCsv';
 
-const canAddPenalty = (status) => status === 'approved' || status === 'completed';
+const canAddPenalty = (status) => status === 'approved';
 const canAssign = (status) => status === 'pending' || status === 'quoted';
 
 const STATUS_COLORS = {
@@ -197,10 +197,15 @@ function TripDetailModal({ trip, onClose, onPenaltyApplied, vehicles }) {
           </div>
         )}
 
-        {/* View-only notice for non-editable statuses */}
-        {!canAddPenalty(trip.status) && (
+        {/* View-only notice */}
+        {trip.status === 'completed' && (
+          <div className="mt-4 p-3 bg-blue-50 rounded text-xs text-blue-700 text-center border border-blue-200">
+            ✓ This trip is <strong>Completed</strong> — view only, no edits allowed.
+          </div>
+        )}
+        {trip.status === 'rejected' && (
           <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-500 text-center border border-gray-200">
-            This trip is <strong>{trip.status}</strong> — view only. No edits allowed.
+            This trip is <strong>Rejected</strong> — view only.
           </div>
         )}
       </div>

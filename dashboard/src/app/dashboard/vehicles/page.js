@@ -85,6 +85,7 @@ export default function VehiclesPage() {
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Rate/KM</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Assigned Driver</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Assign Driver</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-medium">History</th>
               </tr>
             </thead>
             <tbody>
@@ -120,6 +121,9 @@ export default function VehiclesPage() {
                         <option key={d.id} value={d.id}>{d.name} ({d.status})</option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-4 py-3">
+                    <a href={`/dashboard/vehicles/${v.id}`} className="text-blue-600 hover:underline text-xs font-medium">View History</a>
                   </td>
                 </tr>
               ))}
