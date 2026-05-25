@@ -4,6 +4,16 @@ import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
 import { exportCSV } from '../../../lib/exportCsv';
 
+const CONTAINER_LABELS = {
+  '50ft_22_wheeler': '50ft 14-Wheeler',
+  '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo',
+  '40ft_trailer': '40ft Trailer',
+  canter: 'Canter',
+};
+function containerLabel(key) {
+  return CONTAINER_LABELS[key] || (key?.replace(/_/g, ' ') ?? '');
+}
+
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800',
   quoted: 'bg-purple-100 text-purple-800',
@@ -77,7 +87,7 @@ function AssignModal({ trip, vehicles, onClose, onAssigned }) {
               <option value="">Select Vehicle</option>
               {assignableVehicles.map((v) => (
                 <option key={v.id} value={v.id}>
-                  {v.plate_number} — {v.container_type.replace(/_/g, ' ')}
+                  {v.plate_number} — {containerLabel(v.container_type)}
                   {v.driver_name ? ` (Driver: ${v.driver_name})` : ' ⚠ No driver'}
                 </option>
               ))}
@@ -264,7 +274,7 @@ function TripDetailsModal({ trip, onClose, onDone }) {
         <div className="space-y-0 mb-4">
           <Row label="Date" value={trip.created_at?.slice(0, 10)} />
           <Row label="Agent" value={`${trip.agent_name} (${trip.agent_phone})`} />
-          <Row label="Container" value={trip.container_type?.replace(/_/g, ' ')} />
+          <Row label="Container" value={containerLabel(trip.container_type)} />
           <Row label="Vehicle" value={trip.plate_number} />
           <Row label="Driver" value={`${trip.driver_name || '—'}${trip.driver_phone ? ` • ${trip.driver_phone}` : ''}`} />
           <Row label="Payment" value={trip.payment_type === 'bank' ? 'Bank Transfer' : trip.payment_type === 'cash' ? 'Cash' : '—'} color={trip.payment_type === 'bank' ? 'text-blue-600' : 'text-green-600'} />
@@ -404,7 +414,7 @@ export default function TripsPage() {
                       <span className="text-xs text-gray-400">{new Date(trip.created_at).toLocaleDateString()}</span>
                     </div>
                     <p className="font-medium text-gray-800 text-sm">{trip.pickup_location} → {drops.join(' → ')}</p>
-                    <p className="text-xs text-gray-500 mt-1">Agent: {trip.agent_name} • {trip.container_type?.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-gray-500 mt-1">Agent: {trip.agent_name} • {containerLabel(trip.container_type)}</p>
                     <div className="flex gap-4 mt-2 text-xs text-gray-600 flex-wrap">
                       {trip.system_estimated_price && <span>Est: Rs. {parseInt(trip.system_estimated_price).toLocaleString()}</span>}
                       {trip.agent_requested_price && <span className="text-orange-600">Agent offer: Rs. {parseInt(trip.agent_requested_price).toLocaleString()}</span>}

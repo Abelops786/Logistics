@@ -5,6 +5,16 @@ import Layout from '../../../../components/Layout';
 import api from '../../../../lib/api';
 import { exportCSV } from '../../../../lib/exportCsv';
 
+const CONTAINER_LABELS = {
+  '50ft_22_wheeler': '50ft 14-Wheeler',
+  '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo',
+  '40ft_trailer': '40ft Trailer',
+  canter: 'Canter',
+};
+function containerLabel(key) {
+  return CONTAINER_LABELS[key] || (key?.replace(/_/g, ' ') ?? '');
+}
+
 const canAddPenalty = (status) => status === 'approved';
 const canAssign = (status) => status === 'pending' || status === 'quoted';
 
@@ -100,7 +110,7 @@ function TripDetailModal({ trip, onClose, onPenaltyApplied, vehicles }) {
 
         <div className="space-y-0">
           <Row label="Date" value={trip.created_at?.slice(0, 10)} />
-          <Row label="Container" value={trip.container_type?.replace(/_/g, ' ')} />
+          <Row label="Container" value={containerLabel(trip.container_type)} />
           <Row label="Vehicle" value={trip.plate_number} />
           <Row label="Driver" value={trip.driver_name ? `${trip.driver_name}${trip.driver_phone ? ' • ' + trip.driver_phone : ''}` : null} />
           {trip.payment_type && <Row label="Payment" value={trip.payment_type === 'bank' ? 'Bank Transfer' : 'Cash'} color={trip.payment_type === 'bank' ? 'text-blue-600' : 'text-green-600'} />}
@@ -145,7 +155,7 @@ function TripDetailModal({ trip, onClose, onPenaltyApplied, vehicles }) {
                   <option value="">Select Vehicle</option>
                   {assignableVehicles.map((v) => (
                     <option key={v.id} value={v.id}>
-                      {v.plate_number} — {v.container_type?.replace(/_/g, ' ')}
+                      {v.plate_number} — {containerLabel(v.container_type)}
                       {v.driver_name ? ` (Driver: ${v.driver_name})` : ' ⚠ No driver'}
                     </option>
                   ))}
@@ -404,7 +414,7 @@ export default function AgentProfilePage() {
                         <p className="text-gray-700 truncate font-medium text-xs">{trip.pickup_location}</p>
                         <p className="text-gray-400 truncate text-xs">→ {drops.join(' → ')}</p>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{trip.container_type?.replace(/_/g, ' ')}</td>
+                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{containerLabel(trip.container_type)}</td>
                       <td className="px-4 py-3">
                         {trip.plate_number ? (
                           <div>

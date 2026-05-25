@@ -4,6 +4,16 @@ import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
 import { exportCSV } from '../../../lib/exportCsv';
 
+const CONTAINER_LABELS = {
+  '50ft_22_wheeler': '50ft 14-Wheeler',
+  '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo',
+  '40ft_trailer': '40ft Trailer',
+  canter: 'Canter',
+};
+function containerLabel(key) {
+  return CONTAINER_LABELS[key] || (key?.replace(/_/g, ' ') ?? '');
+}
+
 function fmt(n) {
   const v = parseFloat(n) || 0;
   if (v >= 1_000_000) return `Rs. ${(v / 1_000_000).toFixed(2)}M`;
@@ -247,7 +257,7 @@ export default function ReportsPage() {
                     return (
                       <div key={i}>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="font-medium text-gray-700 capitalize">{c.container_type?.replace(/_/g, ' ')}</span>
+                          <span className="font-medium text-gray-700 capitalize">{containerLabel(c.container_type)}</span>
                           <span className="text-gray-500">{c.trips} trips · {fmt(c.revenue)}</span>
                         </div>
                         <div className="w-full bg-gray-100 rounded-full h-3">
@@ -336,7 +346,7 @@ export default function ReportsPage() {
                             <p className="text-gray-700 truncate">{t.pickup_location}</p>
                             <p className="text-xs text-gray-400 truncate">→ {drops.join(' → ')}</p>
                           </td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{t.container_type?.replace(/_/g, ' ')}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{containerLabel(t.container_type)}</td>
                           <td className="px-4 py-3">
                             {t.plate_number ? (
                               <>

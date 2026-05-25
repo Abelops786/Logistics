@@ -5,6 +5,16 @@ import Layout from '../../../../components/Layout';
 import api from '../../../../lib/api';
 import { exportCSV } from '../../../../lib/exportCsv';
 
+const CONTAINER_LABELS = {
+  '50ft_22_wheeler': '50ft 14-Wheeler',
+  '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo',
+  '40ft_trailer': '40ft Trailer',
+  canter: 'Canter',
+};
+function containerLabel(key) {
+  return CONTAINER_LABELS[key] || (key?.replace(/_/g, ' ') ?? '');
+}
+
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800',
   quoted: 'bg-purple-100 text-purple-800',
@@ -53,7 +63,7 @@ function TripDetailModal({ trip, onClose }) {
         <div className="space-y-0">
           <Row label="Date" value={trip.created_at?.slice(0, 10)} />
           <Row label="Agent" value={trip.agent_name ? `${trip.agent_name}${trip.agent_phone ? ' • ' + trip.agent_phone : ''}` : null} />
-          <Row label="Container" value={trip.container_type?.replace(/_/g, ' ')} />
+          <Row label="Container" value={containerLabel(trip.container_type)} />
           <Row label="Driver" value={trip.driver_name} />
           {trip.payment_type && <Row label="Payment" value={trip.payment_type === 'bank' ? 'Bank Transfer' : 'Cash'} color={trip.payment_type === 'bank' ? 'text-blue-600' : 'text-green-600'} />}
           <Row label="System Estimate" value={trip.system_estimated_price ? `Rs. ${parseInt(trip.system_estimated_price).toLocaleString()}` : null} />
@@ -114,7 +124,7 @@ export default function VehicleHistoryPage() {
           {/* Info */}
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-800 mb-1">{vehicle.plate_number}</h1>
-            <p className="text-sm text-gray-500 mb-3">{vehicle.container_type?.replace(/_/g, ' ')} • Rs. {vehicle.rate_per_km}/km</p>
+            <p className="text-sm text-gray-500 mb-3">{containerLabel(vehicle.container_type)} • Rs. {vehicle.rate_per_km}/km</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
                 <p className="text-gray-400 text-xs">Assigned Driver</p>

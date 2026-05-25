@@ -47,7 +47,17 @@ function BarChart({ data, valueKey, labelKey, color = '#2563eb', formatValue }) 
   );
 }
 
-function DonutStat({ items }) {
+const CONTAINER_LABELS = {
+  '50ft_22_wheeler': '50ft 14-Wheeler',
+  '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo',
+  '40ft_trailer': '40ft Trailer',
+  canter: 'Canter',
+};
+function containerLabel(key) {
+  return CONTAINER_LABELS[key] || (key?.replace(/_/g, ' ') ?? '');
+}
+
+function DonutStat({ items, labelFn }) {
   const total = items.reduce((s, i) => s + parseInt(i.count || i.trip_count || 0), 0);
   const colors = {
     pending: '#f59e0b', quoted: '#8b5cf6', approved: '#10b981',
@@ -63,7 +73,7 @@ function DonutStat({ items }) {
         return (
           <div key={i} className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: colors[key] || '#6b7280' }} />
-            <span className="text-sm text-gray-700 flex-1 capitalize">{key?.replace(/_/g, ' ')}</span>
+            <span className="text-sm text-gray-700 flex-1 capitalize">{labelFn ? labelFn(key) : key?.replace(/_/g, ' ')}</span>
             <span className="text-sm font-semibold text-gray-800">{count}</span>
             <span className="text-xs text-gray-400 w-10 text-right">{pct}%</span>
           </div>
@@ -165,11 +175,11 @@ export default function DashboardPage() {
           <h2 className="font-semibold text-gray-800 mb-4">Container Type Split</h2>
           {metrics?.container_breakdown?.length ? (
             <>
-              <DonutStat items={metrics.container_breakdown.map((c) => ({ ...c, count: c.trip_count }))} />
+              <DonutStat items={metrics.container_breakdown.map((c) => ({ ...c, count: c.trip_count }))} labelFn={containerLabel} />
               <div className="mt-4 pt-4 border-t space-y-1">
                 {metrics.container_breakdown.map((c, i) => (
                   <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-500 capitalize">{c.container_type?.replace(/_/g, ' ')}</span>
+                    <span className="text-gray-500 capitalize">{containerLabel(c.container_type)}</span>
                     <span className="font-semibold text-gray-800">{fmtMoney(c.revenue)}</span>
                   </div>
                 ))}
