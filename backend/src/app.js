@@ -23,7 +23,7 @@ app.use('/api/webhook', webhookRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-// WhatsApp connection test — hit this URL to send a test message to ADMIN_WHATSAPP_NUMBER
+// WhatsApp template test — fires all 8 templates to ADMIN_WHATSAPP_NUMBER
 app.get('/test-whatsapp', async (req, res) => {
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_ID;
@@ -33,36 +33,43 @@ app.get('/test-whatsapp', async (req, res) => {
     return res.json({ ok: false, reason: 'Missing env vars', token: !!token, phoneId: !!phoneId, adminPhone: !!adminPhone });
   }
 
+  const axios = require('axios');
   const digits = adminPhone.replace(/\D/g, '');
   const to = digits.startsWith('0') ? '92' + digits.slice(1) : digits;
 
-  try {
-    const axios = require('axios');
-    const result = await axios.post(
-      `https://graph.facebook.com/v25.0/${phoneId}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to,
-        type: 'template',
-        template: {
-          name: 'new_trip_to_admin',
-          language: { code: 'en' },
-          components: [{
-            type: 'body',
-            parameters: [
-              { type: 'text', text: 'Test Agent' },
-              { type: 'text', text: '03001234567' },
-              { type: 'text', text: 'Karachi to Lahore' },
-            ],
-          }],
+  async function send(name, params) {
+    try {
+      const r = await axios.post(
+        `https://graph.facebook.com/v25.0/${phoneId}/messages`,
+        {
+          messaging_product: 'whatsapp', to,
+          type: 'template',
+          template: {
+            name,
+            language: { code: 'en' },
+            components: params.length ? [{ type: 'body', parameters: params.map(text => ({ type: 'text', text })) }] : [],
+          },
         },
-      },
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
-    );
-    res.json({ ok: true, messageId: result.data?.messages?.[0]?.id });
-  } catch (err) {
-    res.json({ ok: false, error: err.response?.data?.error || err.message });
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      );
+      return { ok: true, id: r.data?.messages?.[0]?.id };
+    } catch (err) {
+      return { ok: false, error: err.response?.data?.error?.message || err.message };
+    }
   }
+
+  const results = await Promise.all([
+    send('new_trip_to_admin',                  ['Asher Sajjad', '03145686872', 'Karachi to Lahore']).then(r => ({ template: 'new_trip_to_admin', ...r })),
+    send('template_2__abel_account_approved',  []).then(r => ({ template: 'template_2__abel_account_approved', ...r })),
+    send('template_3__abel_trip_quoted',        ['Karachi to Lahore', '45,000']).then(r => ({ template: 'template_3__abel_trip_quoted', ...r })),
+    send('template_4__abel_trip_approved',      ['ABC-1234', 'Muhammad Usman', '45,000', 'Karachi to Lahore']).then(r => ({ template: 'template_4__abel_trip_approved', ...r })),
+    send('template_5__abel_trip_completed',     ['Karachi to Lahore']).then(r => ({ template: 'template_5__abel_trip_completed', ...r })),
+    send('template_6__abel_trip_not_complete',  ['Karachi to Lahore', 'Vehicle broke down']).then(r => ({ template: 'template_6__abel_trip_not_complete', ...r })),
+    send('template_7__abel_detention_penalty',  ['Karachi to Lahore', '5,000', '50,000']).then(r => ({ template: 'template_7__abel_detention_penalty', ...r })),
+    send('template_8__abel_agent_action',       ['Asher Sajjad', '03145686872', '45,000', 'Karachi to Lahore']).then(r => ({ template: 'template_8__abel_agent_action', ...r })),
+  ]);
+
+  res.json({ results });
 });
 
 app.use((err, req, res, next) => {
