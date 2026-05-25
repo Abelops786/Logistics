@@ -14,6 +14,7 @@ class AppProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _notifications = [];
   int _unreadCount = 0;
   Timer? _pollTimer;
+  String? blockedMessage;
 
   User? get user => _user;
   String? get token => _token;
@@ -99,6 +100,25 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    blockedMessage = null;
+    await _forceLogout();
+  }
+
+  Future<void> loadLedger() async {
+    try {
+      final res = await ApiService.get('/api/agent/ledger');
+      _ledgerSummary = res['summary'];
+      _trips = (res['history'] as List).map((t) => Trip.fromJson(t)).toList();
+      notifyListeners();
+    } on ApiException catch (e) {
+      if (e.statusCode == 403) {
+        blockedMessage = e.body?['message'] ?? e.message;
+        await _forceLogout();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _forceLogout() async {
     _pollTimer?.cancel();
     _token = null;
     _user = null;
@@ -109,14 +129,5 @@ class AppProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     notifyListeners();
-  }
-
-  Future<void> loadLedger() async {
-    try {
-      final res = await ApiService.get('/api/agent/ledger');
-      _ledgerSummary = res['summary'];
-      _trips = (res['history'] as List).map((t) => Trip.fromJson(t)).toList();
-      notifyListeners();
-    } catch (_) {}
   }
 }

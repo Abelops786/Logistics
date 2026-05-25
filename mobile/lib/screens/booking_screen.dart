@@ -24,6 +24,7 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _counterOffer = false;
   final _counterPriceCtrl = TextEditingController();
   bool _submitting = false;
+  int _formKey = 0; // increment to force LocationPicker widgets to reset
 
   final _containerLabels = {
     '50ft_22_wheeler': '50ft 22-Wheeler Container',
@@ -116,6 +117,7 @@ class _BookingScreenState extends State<BookingScreen> {
       _legs = [];
       _distanceSource = '';
       _counterOffer = false;
+      _formKey++; // forces LocationPicker widgets to fully rebuild
     });
   }
 
@@ -183,6 +185,7 @@ class _BookingScreenState extends State<BookingScreen> {
     return Column(
       children: [
         LocationPickerField(
+          key: ValueKey('pickup_$_formKey'),
           hint: 'Pickup Location',
           icon: Icons.radio_button_checked,
           iconColor: Colors.green,
@@ -198,6 +201,7 @@ class _BookingScreenState extends State<BookingScreen> {
           child: Row(children: [
             Expanded(
               child: LocationPickerField(
+                key: ValueKey('dropoff_${i}_$_formKey'),
                 hint: 'Dropoff ${i + 1}',
                 icon: Icons.location_on,
                 iconColor: Colors.red,

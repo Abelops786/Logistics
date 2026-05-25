@@ -7,7 +7,8 @@ import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  final String? blockedMessage;
+  const AuthScreen({super.key, this.blockedMessage});
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -17,6 +18,17 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _loading = false;
   bool _pendingBlock = false;
   String _pendingMessage = '';
+  bool _isSuspended = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.blockedMessage != null) {
+      _pendingBlock = true;
+      _pendingMessage = widget.blockedMessage!;
+      _isSuspended = widget.blockedMessage!.toLowerCase().contains('suspend');
+    }
+  }
 
   // Login fields
   final _phoneCtrl = TextEditingController();
@@ -46,10 +58,11 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() => _loading = true);
     try {
       final res = await context.read<AppProvider>().login(_phoneCtrl.text.trim(), _passCtrl.text);
-      if (res['status'] == 'pending') {
+      if (res['status'] == 'pending' || res['status'] == 'suspended') {
         setState(() {
           _pendingBlock = true;
-          _pendingMessage = res['message'] ?? 'Your profile is under review.';
+          _isSuspended = res['status'] == 'suspended';
+          _pendingMessage = res['message'] ?? (_isSuspended ? 'Your account has been suspended.' : 'Your account is under review.');
         });
       } else if (res.containsKey('token')) {
         // Navigation handled by main.dart watching provider
@@ -102,25 +115,57 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     if (_pendingBlock) {
+      final color = _isSuspended ? Colors.red.shade700 : Colors.orange.shade700;
+      final bgColor = _isSuspended ? Colors.red.shade50 : Colors.orange.shade50;
+      final icon = _isSuspended ? Icons.block_rounded : Icons.access_time_rounded;
+      final title = _isSuspended ? 'Account Suspended' : 'Account Not Approved';
+
       return Scaffold(
-        backgroundColor: Colors.orange.shade50,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.access_time_filled, size: 64, color: Colors.orange),
-                const SizedBox(height: 24),
-                const Text('Profile Under Review', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                Text(_pendingMessage, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: Colors.black87)),
-                const SizedBox(height: 32),
-                TextButton(
-                  onPressed: () => setState(() { _pendingBlock = false; _isLogin = true; }),
-                  child: const Text('Back to Login'),
-                ),
-              ],
+        backgroundColor: const Color(0xFF0A1628),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 80, height: 80,
+                    decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
+                    child: Icon(icon, size: 42, color: color),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: color.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      _pendingMessage,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 14, color: Colors.white70, height: 1.6),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => setState(() { _pendingBlock = false; _isSuspended = false; _isLogin = true; }),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Back to Login', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

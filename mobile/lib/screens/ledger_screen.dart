@@ -117,6 +117,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
     'approved': Colors.green,
     'rejected': Colors.red,
     'completed': Colors.blue,
+    'not_complete': Colors.deepOrange,
   };
 
   Widget _tripCard(BuildContext context, Trip trip, AppProvider provider) {

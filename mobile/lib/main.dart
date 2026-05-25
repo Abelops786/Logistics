@@ -50,6 +50,25 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<AppProvider>(
+      builder: (context, provider, child) {
+        if (!provider.isLoggedIn) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => AuthScreen(blockedMessage: provider.blockedMessage)),
+              (route) => false,
+            );
+          });
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        return child!;
+      },
+      child: _buildShell(context),
+    );
+  }
+
+  Widget _buildShell(BuildContext context) {
     final user = context.read<AppProvider>().user;
     return Scaffold(
       appBar: AppBar(
