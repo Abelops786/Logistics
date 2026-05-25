@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/app_provider.dart';
 import '../services/api_service.dart';
+import '../main.dart';
 
 class AuthScreen extends StatefulWidget {
   final String? blockedMessage;
@@ -65,7 +66,12 @@ class _AuthScreenState extends State<AuthScreen> {
           _pendingMessage = res['message'] ?? (_isSuspended ? 'Your account has been suspended.' : 'Your account is under review.');
         });
       } else if (res.containsKey('token')) {
-        // Navigation handled by main.dart watching provider
+        if (context.mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomeShell()),
+            (route) => false,
+          );
+        }
       } else {
         _showError(res['message'] ?? 'Login failed');
       }
