@@ -43,20 +43,17 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/admin/agents/:id — remove agent (soft delete if has trips, hard delete if no trips)
+// DELETE /api/admin/agents/:id — hard delete agent (nullifies agent_id on trips to preserve history)
 router.delete('/agents/:id', ...isAdmin, async (req, res) => {
   try {
-    const tripCheck = await pool.query('SELECT COUNT(*) FROM trips WHERE agent_id = $1', [req.params.id]);
-    const hasTrips = parseInt(tripCheck.rows[0].count) > 0;
-
-    if (hasTrips) {
-      await pool.query("UPDATE users SET status = 'suspended', updated_at = NOW() WHERE id = $1 AND role = 'agent'", [req.params.id]);
-      return res.json({ message: 'Agent suspended (has trip history — cannot be fully deleted)' });
-    }
-
+    // Nullify agent_id on trips so trip history is kept without the agent reference
+    await pool.query('UPDATE trips SET agent_id = NULL WHERE agent_id = $1', [req.params.id]);
+    // Delete notifications
+    await pool.query('DELETE FROM notifications WHERE user_id = $1', [req.params.id]);
+    // Hard delete the agent
     const { rows } = await pool.query("DELETE FROM users WHERE id = $1 AND role = 'agent' RETURNING name", [req.params.id]);
     if (!rows.length) return res.status(404).json({ message: 'Agent not found' });
-    res.json({ message: `Agent ${rows[0].name} removed` });
+    res.json({ message: `Agent ${rows[0].name} permanently deleted` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
