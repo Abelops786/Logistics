@@ -287,6 +287,20 @@ router.put('/drivers/:id', ...isAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/admin/drivers/:id
+router.delete('/drivers/:id', ...isAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE vehicles SET assigned_driver_id = NULL WHERE assigned_driver_id = $1', [req.params.id]);
+    await pool.query('UPDATE trips SET driver_id = NULL WHERE driver_id = $1', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM drivers WHERE id = $1 RETURNING name', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: 'Driver not found' });
+    res.json({ message: `Driver ${rows[0].name} deleted` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /api/admin/vehicles/:id/history
 router.get('/vehicles/:id/history', ...isAdmin, async (req, res) => {
   try {

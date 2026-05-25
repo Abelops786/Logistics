@@ -38,22 +38,28 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> login(String phone, String password) async {
-    final res = await ApiService.post(
-      '/api/auth/login',
-      {'phone': phone, 'password': password},
-      auth: false,
-    );
-    if (res.containsKey('token')) {
-      _token = res['token'];
-      _user = User.fromJson(res['user']);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', _token!);
-      await prefs.setString('user', jsonEncode(res['user']));
-      notifyListeners();
-      _startPolling();
-      _pollNotifications();
+    try {
+      final res = await ApiService.post(
+        '/api/auth/login',
+        {'phone': phone, 'password': password},
+        auth: false,
+      );
+      if (res.containsKey('token')) {
+        _token = res['token'];
+        _user = User.fromJson(res['user']);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', _token!);
+        await prefs.setString('user', jsonEncode(res['user']));
+        notifyListeners();
+        _startPolling();
+        _pollNotifications();
+      }
+      return res;
+    } on ApiException catch (e) {
+      // 403 means pending or suspended — return body so screen can show proper message
+      if (e.statusCode == 403 && e.body != null) return e.body!;
+      rethrow;
     }
-    return res;
   }
 
   void _startPolling() {

@@ -10,11 +10,85 @@ const STATUS_BADGE = {
   offline: 'bg-gray-100 text-gray-500',
 };
 
+function EditDriverModal({ driver, onClose, onSaved }) {
+  const [form, setForm] = useState({ name: driver.name || '', phone: driver.phone || '', photo_base64: driver.photo_base64 || null });
+  const [saving, setSaving] = useState(false);
+
+  function pickPhoto() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => setForm((f) => ({ ...f, photo_base64: reader.result }));
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {};
+      if (form.name !== driver.name) payload.name = form.name;
+      if (form.phone !== driver.phone) payload.phone = form.phone;
+      if (form.photo_base64 !== driver.photo_base64) payload.photo_base64 = form.photo_base64;
+      await api.put(`/api/admin/drivers/${driver.id}`, payload);
+      onSaved();
+      onClose();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Save failed');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800">Edit Driver</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+        </div>
+        <form onSubmit={save} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm" required />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm" required />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Photo</label>
+            <div onClick={pickPhoto} className="border-2 border-dashed border-gray-300 rounded cursor-pointer hover:border-blue-400 overflow-hidden flex items-center justify-center" style={{ height: 80 }}>
+              {form.photo_base64
+                ? <img src={form.photo_base64} alt="" className="w-full h-full object-cover" />
+                : <span className="text-xs text-gray-400">Click to upload</span>}
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function DriversPage() {
   const [drivers, setDrivers] = useState([]);
   const [form, setForm] = useState({ name: '', phone: '', photo_base64: null });
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [editDriver, setEditDriver] = useState(null);
+  const [actionLoading, setActionLoading] = useState('');
 
   async function load() {
     try {
@@ -47,6 +121,18 @@ export default function DriversPage() {
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to update status');
     }
+  }
+
+  async function handleRemove(driver) {
+    if (!confirm(`Permanently delete driver "${driver.name}"?`)) return;
+    setActionLoading(driver.id);
+    try {
+      const res = await api.delete(`/api/admin/drivers/${driver.id}`);
+      alert(res.data?.message || 'Deleted');
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete');
+    } finally { setActionLoading(''); }
   }
 
   async function addDriver(e) {
@@ -118,7 +204,7 @@ export default function DriversPage() {
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Phone</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Status</th>
                 <th className="px-4 py-3 text-left text-gray-600 font-medium">Assigned Vehicle</th>
-                <th className="px-4 py-3 text-left text-gray-600 font-medium">Change Status</th>
+                <th className="px-4 py-3 text-left text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -138,25 +224,21 @@ export default function DriversPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-600">{d.assigned_vehicle || '—'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
+                      <button onClick={() => setEditDriver(d)} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200">Edit</button>
                       {d.status !== 'available' && (
-                        <button
-                          onClick={() => updateStatus(d.id, 'available')}
-                          className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700"
-                        >Available</button>
+                        <button onClick={() => updateStatus(d.id, 'available')} className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">Available</button>
                       )}
                       {d.status !== 'offline' && (
-                        <button
-                          onClick={() => updateStatus(d.id, 'offline')}
-                          className="px-2 py-1 bg-gray-500 text-white rounded text-xs font-medium hover:bg-gray-600"
-                        >Offline</button>
+                        <button onClick={() => updateStatus(d.id, 'offline')} className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600">Offline</button>
                       )}
                       {d.status !== 'on_trip' && (
-                        <button
-                          onClick={() => updateStatus(d.id, 'on_trip')}
-                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
-                        >On Trip</button>
+                        <button onClick={() => updateStatus(d.id, 'on_trip')} className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">On Trip</button>
                       )}
+                      <button onClick={() => handleRemove(d)} disabled={!!actionLoading}
+                        className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 disabled:opacity-50">
+                        {actionLoading === d.id ? '...' : 'Remove'}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -165,6 +247,8 @@ export default function DriversPage() {
           </table>
         </div>
       )}
+
+      {editDriver && <EditDriverModal driver={editDriver} onClose={() => setEditDriver(null)} onSaved={load} />}
     </Layout>
   );
 }

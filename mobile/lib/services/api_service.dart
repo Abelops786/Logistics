@@ -8,7 +8,8 @@ const String _baseUrl = 'https://logistics-production-1c64.up.railway.app';
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
-  ApiException(this.message, [this.statusCode]);
+  final Map<String, dynamic>? body;
+  ApiException(this.message, [this.statusCode, this.body]);
   @override
   String toString() => message;
 }
@@ -36,8 +37,9 @@ class ApiService {
       body = {'message': res.body.isNotEmpty ? res.body : 'Server error'};
     }
     if (res.statusCode >= 200 && res.statusCode < 300) return body;
-    final msg = (body is Map ? body['message'] : null) ?? 'Error ${res.statusCode}';
-    throw ApiException(msg, res.statusCode);
+    final bodyMap = body is Map ? Map<String, dynamic>.from(body) : null;
+    final msg = bodyMap?['message'] ?? 'Error ${res.statusCode}';
+    throw ApiException(msg, res.statusCode, bodyMap);
   }
 
   static Future<dynamic> post(String path, Map<String, dynamic> body, {bool auth = true}) async {
