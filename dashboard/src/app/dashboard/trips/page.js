@@ -245,12 +245,13 @@ function TripDetailsModal({ trip, onClose, onDone }) {
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-auto">
-      <div className="bg-white rounded-lg p-6 max-w-xl w-full my-4">
-        <div className="flex justify-between items-center mb-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-xl w-full flex flex-col" style={{ maxHeight: '90vh' }}>
+        <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800 text-lg">Trip Details</h3>
           <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
         </div>
+        <div className="overflow-y-auto flex-1 p-6 pt-4">
 
         {/* Route */}
         <div className="bg-gray-50 rounded-lg p-3 mb-4">
@@ -304,6 +305,7 @@ function TripDetailsModal({ trip, onClose, onDone }) {
             ✓ This trip is <strong>Completed</strong> — view only, no edits allowed.
           </div>
         ) : null}
+        </div>
       </div>
     </div>
   );
@@ -398,10 +400,16 @@ export default function TripsPage() {
                     </div>
                     <p className="font-medium text-gray-800 text-sm">{trip.pickup_location} → {drops.join(' → ')}</p>
                     <p className="text-xs text-gray-500 mt-1">Agent: {trip.agent_name} • {trip.container_type?.replace(/_/g, ' ')}</p>
-                    <div className="flex gap-4 mt-2 text-xs text-gray-600">
+                    <div className="flex gap-4 mt-2 text-xs text-gray-600 flex-wrap">
                       {trip.system_estimated_price && <span>Est: Rs. {parseInt(trip.system_estimated_price).toLocaleString()}</span>}
                       {trip.agent_requested_price && <span className="text-orange-600">Agent offer: Rs. {parseInt(trip.agent_requested_price).toLocaleString()}</span>}
                       {trip.admin_final_price && <span className="text-green-600 font-medium">Final: Rs. {parseInt(trip.admin_final_price).toLocaleString()}</span>}
+                      {parseFloat(trip.detention_penalty) > 0 && (
+                        <span className="text-red-600 font-medium">+ Penalty: Rs. {parseInt(trip.detention_penalty).toLocaleString()}</span>
+                      )}
+                      {parseFloat(trip.detention_penalty) > 0 && trip.admin_final_price && (
+                        <span className="text-gray-800 font-bold">= Total: Rs. {(parseFloat(trip.admin_final_price) + parseFloat(trip.detention_penalty)).toLocaleString()}</span>
+                      )}
                     </div>
                     {trip.plate_number && (
                       <p className="text-xs text-gray-500 mt-1">Vehicle: {trip.plate_number} • Driver: {trip.driver_name}</p>
