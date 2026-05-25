@@ -66,9 +66,15 @@ export default function DriversPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Drivers</h1>
         <button
-          onClick={() => exportCSV(drivers.map((d) => ({
-            Name: d.name, Phone: d.phone, Status: d.status, Assigned_Vehicle: d.assigned_vehicle || '',
-          })), 'abel_drivers')}
+          onClick={() => {
+            const sorted = [...drivers].sort((a, b) => a.name.localeCompare(b.name));
+            exportCSV(sorted.map((d) => ({
+              'Driver Name': d.name,
+              'Phone': d.phone,
+              'Status': d.status === 'on_trip' ? 'On Trip' : d.status === 'available' ? 'Available' : 'Offline',
+              'Assigned Vehicle': d.assigned_vehicle || '— None —',
+            })), 'rtransport_drivers');
+          }}
           className="px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700"
         >↓ Export CSV</button>
       </div>

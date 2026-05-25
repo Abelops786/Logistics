@@ -48,10 +48,18 @@ export default function VehiclesPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Vehicles</h1>
         <button
-          onClick={() => exportCSV(vehicles.map((v) => ({
-            Plate: v.plate_number, Type: v.container_type, Rate_Per_KM: v.rate_per_km,
-            Driver: v.driver_name || '', Driver_Phone: v.driver_phone || '', Driver_Status: v.driver_status || '',
-          })), 'abel_vehicles')}
+          onClick={() => {
+            const sorted = [...vehicles].sort((a, b) => a.container_type.localeCompare(b.container_type) || a.plate_number.localeCompare(b.plate_number));
+            const rows = sorted.map((v) => ({
+              'Container Type': v.container_type === '50ft_22_wheeler' ? '50ft 22-Wheeler' : '47ft Jumbo',
+              'Plate Number': v.plate_number,
+              'Rate Per KM (PKR)': v.rate_per_km || '',
+              'Assigned Driver': v.driver_name || '— None —',
+              'Driver Phone': v.driver_phone || '',
+              'Driver Status': v.driver_status || '',
+            }));
+            exportCSV(rows, 'rtransport_vehicles_drivers');
+          }}
           className="px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700"
         >↓ Export CSV</button>
       </div>
