@@ -43,6 +43,36 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/agents/:id/suspend
+router.post('/agents/:id/suspend', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "UPDATE users SET status = 'suspended', updated_at = NOW() WHERE id = $1 AND role = 'agent' RETURNING id, name, phone, status",
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Agent not found' });
+    res.json({ message: 'Agent suspended', agent: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/admin/agents/:id/unsuspend
+router.post('/agents/:id/unsuspend', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "UPDATE users SET status = 'active', updated_at = NOW() WHERE id = $1 AND role = 'agent' RETURNING id, name, phone, status",
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Agent not found' });
+    res.json({ message: 'Agent unsuspended', agent: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // DELETE /api/admin/agents/:id — hard delete agent (nullifies agent_id on trips to preserve history)
 router.delete('/agents/:id', ...isAdmin, async (req, res) => {
   try {

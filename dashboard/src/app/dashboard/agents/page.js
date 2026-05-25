@@ -149,8 +149,30 @@ export default function AgentsPage() {
     } finally { setActionLoading(''); }
   }
 
+  async function handleSuspend(agent) {
+    if (!confirm(`Suspend agent "${agent.name}"?`)) return;
+    setActionLoading(agent.id + 'suspend');
+    try {
+      await api.post(`/api/admin/agents/${agent.id}/suspend`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to suspend agent');
+    } finally { setActionLoading(''); }
+  }
+
+  async function handleUnsuspend(agent) {
+    if (!confirm(`Unsuspend agent "${agent.name}"?`)) return;
+    setActionLoading(agent.id + 'unsuspend');
+    try {
+      await api.post(`/api/admin/agents/${agent.id}/unsuspend`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to unsuspend agent');
+    } finally { setActionLoading(''); }
+  }
+
   async function handleRemove(agent) {
-    if (!confirm(`Remove agent "${agent.name}"? If they have trip history they will be suspended instead.`)) return;
+    if (!confirm(`Permanently delete agent "${agent.name}"? This cannot be undone.`)) return;
     setActionLoading(agent.id + 'remove');
     try {
       const res = await api.delete(`/api/admin/agents/${agent.id}`);
@@ -238,6 +260,18 @@ export default function AgentsPage() {
                             {actionLoading === agent.id + 'reject' ? '...' : 'Reject'}
                           </button>
                         </>
+                      )}
+                      {agent.status === 'active' && (
+                        <button onClick={() => handleSuspend(agent)} disabled={!!actionLoading}
+                          className="px-2 py-1 bg-orange-500 text-white rounded text-xs hover:bg-orange-600 disabled:opacity-50">
+                          {actionLoading === agent.id + 'suspend' ? '...' : 'Suspend'}
+                        </button>
+                      )}
+                      {agent.status === 'suspended' && (
+                        <button onClick={() => handleUnsuspend(agent)} disabled={!!actionLoading}
+                          className="px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600 disabled:opacity-50">
+                          {actionLoading === agent.id + 'unsuspend' ? '...' : 'Unsuspend'}
+                        </button>
                       )}
                       <button onClick={() => handleRemove(agent)} disabled={!!actionLoading}
                         className="px-2 py-1 bg-red-700 text-white rounded text-xs hover:bg-red-800 disabled:opacity-50">
