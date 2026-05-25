@@ -4,6 +4,77 @@ import Layout from '../../../components/Layout';
 import api from '../../../lib/api';
 import { exportCSV } from '../../../lib/exportCsv';
 
+const TYPE_LABELS = {
+  '50ft_22_wheeler': '50ft 22-Wheeler',
+  '47ft_22_wheeler_jumbo': '47ft Jumbo',
+  '40ft_trailer': '40ft Trailer',
+  'canter': 'Canter',
+};
+
+function EditVehicleModal({ vehicle, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    plate_number: vehicle.plate_number || '',
+    container_type: vehicle.container_type || '50ft_22_wheeler',
+    rate_per_km: vehicle.rate_per_km || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/api/admin/vehicles/${vehicle.id}`, {
+        plate_number: form.plate_number,
+        container_type: form.container_type,
+        rate_per_km: parseFloat(form.rate_per_km) || 0,
+      });
+      onSaved();
+      onClose();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Save failed');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800">Edit Vehicle</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+        </div>
+        <form onSubmit={save} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Plate Number</label>
+            <input value={form.plate_number} onChange={(e) => setForm({ ...form, plate_number: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm" required />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Container Type</label>
+            <select value={form.container_type} onChange={(e) => setForm({ ...form, container_type: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+              <option value="50ft_22_wheeler">50ft 22-Wheeler</option>
+              <option value="47ft_22_wheeler_jumbo">47ft Jumbo</option>
+              <option value="40ft_trailer">40ft Trailer</option>
+              <option value="canter">Canter</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Rate Per KM (PKR)</label>
+            <input type="number" value={form.rate_per_km} onChange={(e) => setForm({ ...form, rate_per_km: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="submit" disabled={saving} className="flex-1 bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function ManageDriversModal({ vehicle, allDrivers, onClose, onSaved }) {
   const [search, setSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -140,6 +211,20 @@ export default function VehiclesPage() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [manageVehicle, setManageVehicle] = useState(null);
+  const [editVehicle, setEditVehicle] = useState(null);
+  const [actionLoading, setActionLoading] = useState('');
+
+  async function handleDelete(v) {
+    if (!confirm(`Delete vehicle "${v.plate_number}"? This cannot be undone.`)) return;
+    setActionLoading(v.id);
+    try {
+      const res = await api.delete(`/api/admin/vehicles/${v.id}`);
+      alert(res.data?.message || 'Deleted');
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete');
+    } finally { setActionLoading(''); }
+  }
 
   async function load() {
     try {
@@ -255,12 +340,14 @@ export default function VehiclesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setManageVehicle(v)}
-                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                        >Manage Drivers</button>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button onClick={() => setEditVehicle(v)} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200">Edit</button>
+                        <button onClick={() => setManageVehicle(v)} className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Drivers</button>
                         <a href={`/dashboard/vehicles/${v.id}`} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200">History</a>
+                        <button onClick={() => handleDelete(v)} disabled={!!actionLoading}
+                          className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 disabled:opacity-50">
+                          {actionLoading === v.id ? '...' : 'Delete'}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -270,6 +357,8 @@ export default function VehiclesPage() {
           </table>
         </div>
       )}
+
+      {editVehicle && <EditVehicleModal vehicle={editVehicle} onClose={() => setEditVehicle(null)} onSaved={load} />}
 
       {manageVehicle && (
         <ManageDriversModal

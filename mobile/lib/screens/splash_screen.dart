@@ -56,10 +56,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 Image.asset('assets/logo.png', width: 160, height: 160),
                 const SizedBox(height: 28),
                 const Text(
-                  'Ayazz Memon Pinger',
+                  'R Transport',
                   style: TextStyle(
                     color: Color(0xFFD4A843),
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
                   ),

@@ -287,6 +287,20 @@ router.put('/drivers/:id', ...isAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/admin/vehicles/:id
+router.delete('/vehicles/:id', ...isAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE drivers SET vehicle_id = NULL WHERE vehicle_id = $1', [req.params.id]);
+    await pool.query('UPDATE trips SET vehicle_id = NULL, driver_id = NULL WHERE vehicle_id = $1', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM vehicles WHERE id = $1 RETURNING plate_number', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: 'Vehicle not found' });
+    res.json({ message: `Vehicle ${rows[0].plate_number} deleted` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // DELETE /api/admin/drivers/:id
 router.delete('/drivers/:id', ...isAdmin, async (req, res) => {
   try {
@@ -373,6 +387,27 @@ router.delete('/vehicles/:id/remove-driver/:driverId', ...isAdmin, async (req, r
     // If this was the primary driver, clear assigned_driver_id
     await pool.query('UPDATE vehicles SET assigned_driver_id = NULL WHERE id = $1 AND assigned_driver_id = $2', [req.params.id, req.params.driverId]);
     res.json({ message: 'Driver removed from vehicle' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/admin/vehicles/:id — update plate, type, rate
+router.put('/vehicles/:id', ...isAdmin, async (req, res) => {
+  const { plate_number, container_type, rate_per_km } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE vehicles SET
+         plate_number = COALESCE($1, plate_number),
+         container_type = COALESCE($2, container_type),
+         rate_per_km = COALESCE($3, rate_per_km),
+         updated_at = NOW()
+       WHERE id = $4 RETURNING *`,
+      [plate_number || null, container_type || null, rate_per_km != null ? rate_per_km : null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Vehicle not found' });
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
