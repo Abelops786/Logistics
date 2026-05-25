@@ -161,7 +161,7 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
     const trip = rows[0];
     const route = `${pickup_location} → ${dropoff_locations.join(' → ')}`;
     const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER;
-    if (adminPhone) await sendWhatsApp(adminPhone, [req.user.name, route]);
+    if (adminPhone) await sendWhatsApp(adminPhone, [req.user.name, route, '', '', '', req.user.phone || '']);
     if (process.env.ADMIN_EMAIL) {
       await sendEmail(process.env.ADMIN_EMAIL, `New Trip Request from ${req.user.name}`,
         `<p>Agent <strong>${req.user.name}</strong> submitted a new trip request.</p><p>Route: ${route}</p><p>Container: ${container_type}</p>`);

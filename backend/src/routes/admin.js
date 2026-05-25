@@ -2,7 +2,7 @@ const express = require('express');
 const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { buildTripWhereClause, stripCashFieldsArray } = require('../middleware/tripFilter');
-const { sendWhatsApp, sendQuotedNotification, sendPenaltyNotification, sendCompletedNotification, sendNotCompleteNotification } = require('../services/notificationService');
+const { sendWhatsApp, sendAccountApproved, sendQuotedNotification, sendPenaltyNotification, sendCompletedNotification, sendNotCompleteNotification } = require('../services/notificationService');
 const { notify } = require('../services/notifyAgent');
 
 const router = express.Router();
@@ -33,7 +33,7 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
     if (!rows.length) return res.status(404).json({ message: 'Agent not found' });
 
     if (newStatus === 'active') {
-      await sendWhatsApp(rows[0].phone, [rows[0].name, 'Your Abel Logistics agent account has been approved. You can now log in.', '', '', '']);
+      await sendAccountApproved(rows[0].phone);
       await notify(rows[0].id, 'Account Approved ✅', 'Your Abel Logistics agent account is now active. You can submit trip requests.', 'account_approved');
     }
     res.json({ message: `Agent ${newStatus}`, agent: rows[0] });

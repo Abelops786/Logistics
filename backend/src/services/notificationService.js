@@ -1,4 +1,4 @@
-// Notification engine — Meta WhatsApp Cloud API v25.0
+// Notification engine — Meta WhatsApp Cloud API v25.0 (template messages)
 const axios = require('axios');
 
 const API_VERSION = 'v25.0';
@@ -17,10 +17,10 @@ function _cleanPhone(phone) {
   return digits;
 }
 
-async function _send(toPhone, messageBody) {
+async function _sendTemplate(toPhone, templateName, params) {
   const { token, phoneId } = _getConfig();
   if (!token || !phoneId) {
-    console.log('[WhatsApp Stub — set WHATSAPP_TOKEN and WHATSAPP_PHONE_ID in Railway]', toPhone);
+    console.log('[WhatsApp Stub — set WHATSAPP_TOKEN and WHATSAPP_PHONE_ID in Railway]', toPhone, templateName);
     return;
   }
   const url = `https://graph.facebook.com/${API_VERSION}/${phoneId}/messages`;
@@ -28,8 +28,14 @@ async function _send(toPhone, messageBody) {
     const res = await axios.post(url, {
       messaging_product: 'whatsapp',
       to: _cleanPhone(toPhone),
-      type: 'text',
-      text: { body: messageBody },
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: 'en' },
+        components: params.length
+          ? [{ type: 'body', parameters: params.map(text => ({ type: 'text', text: String(text) })) }]
+          : [],
+      },
     }, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
@@ -39,65 +45,57 @@ async function _send(toPhone, messageBody) {
   }
 }
 
-// New booking request → admin
+// New booking → admin  OR  Trip approved → agent
 async function sendWhatsApp(toPhone, variables) {
   const [agentName, route, price, plateNumber, driverName] = variables;
+  const agentPhone = variables[5] || '';
 
-  let text;
   if (plateNumber && driverName && price) {
-    // Trip approved → agent
-    text = `*Abel Logistics* ✅\n\nTrip Approved!\n\n🚛 Vehicle: ${plateNumber}\n👤 Driver: ${driverName}\n💰 Final Price: PKR ${Number(price).toLocaleString()}\n\nRoute: ${route}`;
-  } else if (!price && !plateNumber) {
-    // Account approved → agent (route contains a descriptive message here)
-    text = `*Abel Logistics* ✅\n\nYour agent account has been approved! You can now log in and submit trip requests.`;
+    // Trip approved → agent: {{1}}=Vehicle {{2}}=Driver {{3}}=Price {{4}}=Route
+    await _sendTemplate(toPhone, 'template_4__abel_trip_approved', [
+      plateNumber, driverName, Number(price).toLocaleString(), route,
+    ]);
   } else {
-    // New booking → admin
-    text = `*Abel Logistics* 🚛\n\nNew trip request from Agent *${agentName}*\n\nRoute: ${route}`;
+    // New booking → admin: {{1}}=AgentName {{2}}=Phone {{3}}=Route
+    await _sendTemplate(toPhone, 'new_trip_to_admin', [agentName, agentPhone, route]);
   }
-
-  await _send(toPhone, text);
 }
 
-// Quoted price → agent
+// Account approved → agent (no variables)
+async function sendAccountApproved(toPhone) {
+  await _sendTemplate(toPhone, 'template_2__abel_account_approved', []);
+}
+
+// Quoted price → agent: {{1}}=Route {{2}}=Price
 async function sendQuotedNotification(toPhone, agentName, route, price) {
-  await _send(toPhone,
-    `*Abel Logistics* ⏳\n\nAdmin has quoted a price for your trip.\n\nRoute: ${route}\n💰 Quoted Price: PKR ${Number(price).toLocaleString()}\n\nPlease open the app to Accept, Reject, or Re-Price.`
-  );
+  await _sendTemplate(toPhone, 'template_3__abel_trip_quoted', [route, Number(price).toLocaleString()]);
 }
 
-// Detention penalty → agent
+// Detention penalty → agent: {{1}}=Route {{2}}=Penalty {{3}}=NewTotal
 async function sendPenaltyNotification(toPhone, agentName, route, penaltyAmount, newTotal) {
-  await _send(toPhone,
-    `*Abel Logistics* ⚠️\n\nA detention penalty has been added to your trip.\n\nRoute: ${route}\n⚠️ Penalty: PKR ${Number(penaltyAmount).toLocaleString()}\n💰 New Total: PKR ${Number(newTotal).toLocaleString()}`
-  );
+  await _sendTemplate(toPhone, 'template_7__abel_detention_penalty', [
+    route, Number(penaltyAmount).toLocaleString(), Number(newTotal).toLocaleString(),
+  ]);
 }
 
-// Trip completed → agent
+// Trip completed → agent: {{1}}=Route
 async function sendCompletedNotification(toPhone, route, notes) {
-  await _send(toPhone,
-    `*Abel Logistics* ✅\n\nYour trip has been marked as Completed!\n\nRoute: ${route}${notes ? `\n📝 Note: ${notes}` : ''}`
-  );
+  await _sendTemplate(toPhone, 'template_5__abel_trip_completed', [route]);
 }
 
-// Trip not complete → agent
+// Trip not complete → agent: {{1}}=Route {{2}}=Reason
 async function sendNotCompleteNotification(toPhone, route, reason) {
-  await _send(toPhone,
-    `*Abel Logistics* ❌\n\nYour trip has been marked as Not Completed.\n\nRoute: ${route}\n📋 Reason: ${reason}`
-  );
+  await _sendTemplate(toPhone, 'template_6__abel_trip_not_complete', [route, reason]);
 }
 
-// Agent action (accept / reject / counter) → admin
-async function sendAdminAlert(agentName, action, route, price) {
+// Agent action (accept / reject / counter) → admin: {{1}}=AgentName {{2}}=Phone {{3}}=Price {{4}}=Route
+async function sendAdminAlert(agentName, action, route, price, agentPhone) {
   const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER;
   if (!adminPhone) return;
-  const actionText = {
-    accept: `✅ *${agentName}* accepted the quoted price of PKR ${Number(price).toLocaleString()}`,
-    reject: `❌ *${agentName}* rejected the quoted price`,
-    counter: `🔄 *${agentName}* sent a counter price of PKR ${Number(price).toLocaleString()}`,
-  }[action] || `*${agentName}* updated a trip`;
-  await _send(adminPhone,
-    `*Abel Logistics* 🔔\n\n${actionText}\n\nRoute: ${route}\n\nPlease open the dashboard.`
-  );
+  const priceText = price ? Number(price).toLocaleString() : 'N/A';
+  await _sendTemplate(adminPhone, 'template_8__abel_agent_action', [
+    agentName, agentPhone || '', priceText, route,
+  ]);
 }
 
 async function sendEmail(to, subject, html) {
@@ -116,4 +114,7 @@ async function sendEmail(to, subject, html) {
   }
 }
 
-module.exports = { sendWhatsApp, sendQuotedNotification, sendPenaltyNotification, sendCompletedNotification, sendNotCompleteNotification, sendAdminAlert, sendEmail };
+module.exports = {
+  sendWhatsApp, sendAccountApproved, sendQuotedNotification, sendPenaltyNotification,
+  sendCompletedNotification, sendNotCompleteNotification, sendAdminAlert, sendEmail,
+};

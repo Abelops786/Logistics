@@ -80,7 +80,7 @@ router.post('/trips/:id/counter', authenticate, requireRole('agent'), async (req
     const trip = rows[0];
     const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
     const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
-    await sendAdminAlert(req.user.name, 'counter', route, new_price);
+    await sendAdminAlert(req.user.name, 'counter', route, new_price, req.user.phone);
     res.json({ message: 'Counter price sent. Admin will review.', trip });
   } catch (err) {
     console.error(err);
@@ -119,7 +119,7 @@ router.post('/trips/:id/confirm', authenticate, requireRole('agent'), async (req
     }
 
     // Notify admin via WhatsApp
-    await sendAdminAlert(req.user.name, action, route, trip.admin_final_price);
+    await sendAdminAlert(req.user.name, action, route, trip.admin_final_price, req.user.phone);
 
     res.json({ message: `Trip ${newStatus}`, trip });
   } catch (err) {
