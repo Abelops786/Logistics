@@ -12,6 +12,13 @@ async function authenticate(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const { rows } = await pool.query('SELECT id, name, phone, role, status FROM users WHERE id = $1', [decoded.id]);
     if (!rows.length) return res.status(401).json({ message: 'User not found' });
+    if (rows[0].status === 'suspended') {
+      const contact = process.env.ADMIN_WHATSAPP_NUMBER || '';
+      return res.status(403).json({ status: 'suspended', message: `Your account has been suspended.${contact ? ' Contact admin: ' + contact : ' Please contact support.'}` });
+    }
+    if (rows[0].status === 'pending') {
+      return res.status(403).json({ status: 'pending', message: 'Your account is not approved yet. Admin will notify you on WhatsApp once approved.' });
+    }
     if (rows[0].status !== 'active') return res.status(403).json({ message: 'Account not active' });
     req.user = rows[0];
     next();

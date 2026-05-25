@@ -14,9 +14,9 @@ router.get('/ledger', authenticate, requireRole('agent'), async (req, res) => {
     const summary = await pool.query(
       `SELECT
          COUNT(*) FILTER (WHERE agent_id = $1) AS total_requests,
-         COUNT(*) FILTER (WHERE agent_id = $1 AND status = 'approved') AS approved_trips,
+         COUNT(*) FILTER (WHERE agent_id = $1 AND status IN ('approved','completed')) AS approved_trips,
          COUNT(*) FILTER (WHERE agent_id = $1 AND status = 'rejected') AS rejected_trips,
-         COALESCE(SUM(admin_final_price) FILTER (WHERE agent_id = $1 AND status = 'approved'), 0) AS total_revenue
+         COALESCE(SUM(admin_final_price + COALESCE(detention_penalty,0)) FILTER (WHERE agent_id = $1 AND status IN ('approved','completed')), 0) AS total_revenue
        FROM trips`,
       [agentId]
     );
