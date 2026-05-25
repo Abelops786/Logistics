@@ -10,6 +10,7 @@ const STATUS_COLORS = {
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
   completed: 'bg-blue-100 text-blue-800',
+  not_complete: 'bg-orange-100 text-orange-800',
 };
 
 function AssignModal({ trip, vehicles, onClose, onAssigned }) {
@@ -302,7 +303,11 @@ function TripDetailsModal({ trip, onClose, onDone }) {
           </div>
         ) : trip.status === 'completed' ? (
           <div className="mt-2 p-3 bg-blue-50 rounded text-xs text-blue-700 text-center border border-blue-200">
-            ✓ This trip is <strong>Completed</strong> — view only, no edits allowed.
+            ✓ This trip is <strong>Completed</strong> — view only.
+          </div>
+        ) : trip.status === 'not_complete' ? (
+          <div className="mt-2 p-3 bg-orange-50 rounded text-xs text-orange-700 text-center border border-orange-200">
+            ✕ Marked <strong>Not Complete</strong>. Use <strong>Re-Assign</strong> to update pricing, then <strong>Complete</strong>.
           </div>
         ) : null}
         </div>
@@ -371,13 +376,13 @@ export default function TripsPage() {
       </div>
 
       <div className="flex gap-2 mb-6 flex-wrap">
-        {['all', 'pending', 'quoted', 'approved', 'rejected', 'completed'].map((s) => (
+        {['all', 'pending', 'quoted', 'approved', 'not_complete', 'rejected', 'completed'].map((s) => (
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
             className={`px-3 py-1.5 rounded text-sm font-medium capitalize ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
           >
-            {s}
+            {s === 'not_complete' ? 'Not Complete' : s}
           </button>
         ))}
       </div>
@@ -435,6 +440,18 @@ export default function TripsPage() {
                         <button onClick={() => setNotCompleteTrip(trip)}
                           className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700">
                           ✕ Not Complete
+                        </button>
+                      </>
+                    )}
+                    {trip.status === 'not_complete' && (
+                      <>
+                        <button onClick={() => setAssignTrip(trip)}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700">
+                          Re-Assign
+                        </button>
+                        <button onClick={() => setCompleteTrip(trip)}
+                          className="px-3 py-1.5 bg-green-700 text-white rounded text-xs font-medium hover:bg-green-800">
+                          ✓ Complete
                         </button>
                       </>
                     )}

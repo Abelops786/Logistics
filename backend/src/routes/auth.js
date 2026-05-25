@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const pool = require('../config/database');
+const { sendWhatsApp } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -34,6 +35,9 @@ router.post(
          RETURNING id, name, phone, status`,
         [name, cnic, phone, password_hash, region || null, cnic_front_base64 || null, cnic_back_base64 || null]
       );
+
+      const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER;
+      if (adminPhone) await sendWhatsApp(adminPhone, [name, 'New Agent Registration', '', '', '', phone]);
 
       res.status(201).json({ message: 'Registration successful. Awaiting admin approval.', user: rows[0] });
     } catch (err) {

@@ -439,7 +439,7 @@ router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
       `UPDATE trips SET status = 'completed', completion_notes = $1,
        total_amount = admin_final_price + COALESCE(detention_penalty, 0),
        updated_at = NOW()
-       WHERE id = $2 AND status = 'approved'
+       WHERE id = $2 AND status IN ('approved', 'not_complete')
        RETURNING *`,
       [notes || null, req.params.id]
     );
@@ -468,7 +468,7 @@ router.post('/trips/:id/not-complete', ...isAdmin, async (req, res) => {
   if (!reason?.trim()) return res.status(400).json({ message: 'Reason is required' });
   try {
     const { rows } = await pool.query(
-      `UPDATE trips SET status = 'rejected', not_complete_reason = $1, updated_at = NOW()
+      `UPDATE trips SET status = 'not_complete', not_complete_reason = $1, updated_at = NOW()
        WHERE id = $2 AND status = 'approved'
        RETURNING *`,
       [reason, req.params.id]
