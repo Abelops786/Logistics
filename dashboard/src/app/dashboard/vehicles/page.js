@@ -5,8 +5,8 @@ import api from '../../../lib/api';
 import { exportCSV } from '../../../lib/exportCsv';
 
 const TYPE_LABELS = {
-  '50ft_22_wheeler': '50ft 22-Wheeler',
-  '47ft_22_wheeler_jumbo': '47ft Jumbo',
+  '50ft_22_wheeler': '50ft 14-Wheeler',
+  '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo',
   '40ft_trailer': '40ft Trailer',
   'canter': 'Canter',
 };
@@ -52,8 +52,8 @@ function EditVehicleModal({ vehicle, onClose, onSaved }) {
             <label className="block text-xs font-medium text-gray-600 mb-1">Container Type</label>
             <select value={form.container_type} onChange={(e) => setForm({ ...form, container_type: e.target.value })}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
-              <option value="50ft_22_wheeler">50ft 22-Wheeler</option>
-              <option value="47ft_22_wheeler_jumbo">47ft Jumbo</option>
+              <option value="50ft_22_wheeler">50ft 14-Wheeler</option>
+              <option value="47ft_22_wheeler_jumbo">47ft 14-Wheeler Jumbo</option>
               <option value="40ft_trailer">40ft Trailer</option>
               <option value="canter">Canter</option>
             </select>
@@ -287,8 +287,8 @@ export default function VehiclesPage() {
             placeholder="Plate Number" className="border border-gray-300 rounded px-3 py-2 text-sm" required />
           <select value={form.container_type} onChange={(e) => setForm({ ...form, container_type: e.target.value })}
             className="border border-gray-300 rounded px-3 py-2 text-sm">
-            <option value="50ft_22_wheeler">50ft 22-Wheeler</option>
-            <option value="47ft_22_wheeler_jumbo">47ft Jumbo</option>
+            <option value="50ft_22_wheeler">50ft 14-Wheeler</option>
+            <option value="47ft_22_wheeler_jumbo">47ft 14-Wheeler Jumbo</option>
             <option value="40ft_trailer">40ft Trailer</option>
             <option value="canter">Canter</option>
           </select>
