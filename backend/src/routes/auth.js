@@ -37,7 +37,7 @@ router.post(
       );
 
       const adminPhone = process.env.ADMIN_WHATSAPP_NUMBER;
-      if (adminPhone) await sendWhatsApp(adminPhone, [name, 'New Agent Registration', '', '', '', phone]);
+      if (adminPhone) sendWhatsApp(adminPhone, [name, 'New Agent Registration', '', '', '', phone]).catch(() => {});
 
       res.status(201).json({ message: 'Registration successful. Awaiting admin approval.', user: rows[0] });
     } catch (err) {

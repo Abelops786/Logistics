@@ -149,6 +149,18 @@ export default function AgentsPage() {
     } finally { setActionLoading(''); }
   }
 
+  async function handleRemove(agent) {
+    if (!confirm(`Remove agent "${agent.name}"? If they have trip history they will be suspended instead.`)) return;
+    setActionLoading(agent.id + 'remove');
+    try {
+      const res = await api.delete(`/api/admin/agents/${agent.id}`);
+      alert(res.data?.message || 'Done');
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to remove agent');
+    } finally { setActionLoading(''); }
+  }
+
   return (
     <Layout>
       <div className="flex justify-between items-center mb-6">
@@ -213,7 +225,7 @@ export default function AgentsPage() {
                     ) : <span className="text-xs text-gray-400">Not uploaded</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <button onClick={() => setEditAgent(agent)} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200">Edit</button>
                       {tab === 'pending' && (
                         <>
@@ -227,6 +239,10 @@ export default function AgentsPage() {
                           </button>
                         </>
                       )}
+                      <button onClick={() => handleRemove(agent)} disabled={!!actionLoading}
+                        className="px-2 py-1 bg-red-700 text-white rounded text-xs hover:bg-red-800 disabled:opacity-50">
+                        {actionLoading === agent.id + 'remove' ? '...' : 'Remove'}
+                      </button>
                     </div>
                   </td>
                 </tr>
