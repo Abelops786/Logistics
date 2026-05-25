@@ -34,7 +34,7 @@ router.post('/agents/:id/approve', ...isAdmin, async (req, res) => {
 
     if (newStatus === 'active') {
       await sendAccountApproved(rows[0].phone);
-      await notify(rows[0].id, 'Account Approved ✅', 'Your Abel Logistics agent account is now active. You can submit trip requests.', 'account_approved');
+      await notify(rows[0].id, 'Account Approved ✅', 'Your R Transport agent account is now active. You can submit trip requests.', 'account_approved');
     }
     res.json({ message: `Agent ${newStatus}`, agent: rows[0] });
   } catch (err) {

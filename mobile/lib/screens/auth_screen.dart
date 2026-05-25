@@ -136,7 +136,7 @@ class _AuthScreenState extends State<AuthScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 40),
-              const Text('Abel Dispatch', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              const Text('R Transport', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
               const Text('Logistics Agent App', style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 40),
 

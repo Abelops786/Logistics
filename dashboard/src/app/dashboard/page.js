@@ -109,7 +109,7 @@ export default function DashboardPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-sm text-gray-400">Abel Logistics — Live Overview</p>
+          <p className="text-sm text-gray-400">R Transport — Live Overview</p>
         </div>
         <button
           onClick={() => exportCSV(metrics?.top_agents?.map((a) => ({
