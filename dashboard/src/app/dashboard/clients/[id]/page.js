@@ -124,6 +124,26 @@ export default function ClientProfilePage() {
   const [ledgerTo, setLedgerTo] = useState('');
   const [adjModal, setAdjModal] = useState(false);
   const [activeTab, setActiveTab] = useState('ledger');
+  const [reversing, setReversing] = useState('');
+
+  async function handleReverse(tx) {
+    const label = TX_LABELS[tx.transaction_type] || tx.transaction_type;
+    if (!confirm(`Reverse this ${label} of ${fmtMoney(tx.amount)}?\n\nA counter-entry will be posted to cancel it out.`)) return;
+    const reverseType = tx.transaction_type === 'payment' ? 'invoice' : 'payment';
+    setReversing(tx.id);
+    try {
+      await api.post(`/api/admin/clients/${id}/ledger-adjustment`, {
+        transaction_type: reverseType,
+        amount: tx.amount,
+        payment_mode: tx.payment_mode || 'bank_transfer',
+        reference_number: '',
+        internal_notes: `Reversal of: ${tx.internal_notes || label}`,
+      });
+      load(ledgerFrom || undefined, ledgerTo || undefined);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Reversal failed');
+    } finally { setReversing(''); }
+  }
 
   async function load(from, to) {
     setLoading(true);
@@ -256,13 +276,15 @@ export default function ClientProfilePage() {
                       <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium">Amount</th>
                       <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium">Running Balance</th>
                       <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Logged By</th>
+                      <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {transactions.map((tx) => {
                       const isCharge = tx.transaction_type !== 'payment';
+                      const isReversal = tx.internal_notes?.startsWith('Reversal of:');
                       return (
-                        <tr key={tx.id} className="border-t border-gray-50 hover:bg-gray-50">
+                        <tr key={tx.id} className={`border-t border-gray-50 hover:bg-gray-50 ${isReversal ? 'opacity-60' : ''}`}>
                           <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{tx.created_at?.slice(0, 10)}</td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TX_COLORS[tx.transaction_type] || 'bg-gray-100 text-gray-600'}`}>
@@ -284,6 +306,16 @@ export default function ClientProfilePage() {
                             {fmtMoney(tx.running_balance)}
                           </td>
                           <td className="px-4 py-3 text-xs text-gray-400">{tx.processed_by_name || '—'}</td>
+                          <td className="px-4 py-3">
+                            {!isReversal && (
+                              <button
+                                onClick={() => handleReverse(tx)}
+                                disabled={reversing === tx.id}
+                                className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 whitespace-nowrap">
+                                {reversing === tx.id ? '...' : 'Reverse'}
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
