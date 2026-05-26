@@ -860,7 +860,10 @@ router.get('/agents/:id/ledger', ...isAdmin, async (req, res) => {
     const [summaryRow, txRows] = await Promise.all([
       pool.query(
         `SELECT
-           COALESCE(SUM(amount) FILTER (WHERE transaction_type='credit'),0) AS total_revenue,
+           (SELECT COALESCE(SUM(admin_final_price + COALESCE(detention_penalty,0)),0)
+            FROM trips
+            WHERE agent_id=$1 AND status IN ('approved','completed')
+              AND created_at>=$2 AND created_at<$3) AS total_revenue,
            COALESCE(SUM(amount) FILTER (WHERE transaction_type='debit'),0) AS total_collected
          FROM ledger_transactions
          WHERE agent_id=$1 AND created_at>=$2 AND created_at<$3`,
@@ -927,7 +930,9 @@ router.post('/agents/:id/ledger-adjustment', ...isAdmin, async (req, res) => {
 
 // GET /api/admin/clients/:id/profile
 router.get('/clients/:id/profile', ...isAdmin, async (req, res) => {
-  const [rangeStart, rangeEnd] = ledgerDateRange(req.query);
+  const { from, to } = req.query;
+  const rangeStart = from ? new Date(from).toISOString() : '1970-01-01T00:00:00.000Z';
+  const rangeEnd = to ? new Date(new Date(to).getTime() + 86400000).toISOString() : '9999-12-31T00:00:00.000Z';
   const clientId = req.params.id;
   try {
     const [clientRow, summaryRow, txRows, tripsRow] = await Promise.all([

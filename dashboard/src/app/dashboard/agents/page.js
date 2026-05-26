@@ -121,7 +121,7 @@ function EditAgentModal({ agent, onClose, onSaved }) {
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState([]);
-  const [tab, setTab] = useState('pending');
+  const [tab, setTab] = useState('all');
   const [loading, setLoading] = useState(true);
   const [cnicModal, setCnicModal] = useState(null);
   const [editAgent, setEditAgent] = useState(null);

@@ -205,9 +205,17 @@ export default function ClientProfilePage() {
                   className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                   Apply
                 </button>
+                <button onClick={() => {
+                  const now = new Date();
+                  const from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+                  const to = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+                  setLedgerFrom(from); setLedgerTo(to); load(from, to);
+                }} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-sm hover:bg-gray-200">
+                  This Month
+                </button>
                 <button onClick={() => { setLedgerFrom(''); setLedgerTo(''); load(); }}
                   className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-sm hover:bg-gray-200">
-                  This Month
+                  All Time
                 </button>
                 <button onClick={() => setAdjModal(true)}
                   className="px-4 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700">
