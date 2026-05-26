@@ -672,13 +672,14 @@ router.get('/clients', ...isAdmin, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT c.*,
-        COALESCE(SUM(clt.amount) FILTER (WHERE clt.transaction_type IN ('invoice','adjustment')),0)
-          - COALESCE(SUM(clt.amount) FILTER (WHERE clt.transaction_type = 'payment'),0) AS outstanding_balance,
-        COUNT(DISTINCT t.id) FILTER (WHERE t.status IN ('approved','pending','quoted')) AS active_trips
+        COALESCE((
+          SELECT SUM(amount) FILTER (WHERE transaction_type IN ('invoice','adjustment'))
+               - SUM(amount) FILTER (WHERE transaction_type = 'payment')
+          FROM client_ledger_transactions WHERE client_id = c.id
+        ), 0) AS outstanding_balance,
+        (SELECT COUNT(*) FROM trips
+         WHERE client_id = c.id AND status IN ('approved','pending','quoted')) AS active_trips
       FROM clients c
-      LEFT JOIN client_ledger_transactions clt ON clt.client_id = c.id
-      LEFT JOIN trips t ON t.client_id = c.id
-      GROUP BY c.id
       ORDER BY c.name ASC
     `);
     res.json(rows);
