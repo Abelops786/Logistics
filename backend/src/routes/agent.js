@@ -118,15 +118,19 @@ router.post('/trips/:id/confirm', authenticate, requireRole('agent'), async (req
       await notify(req.user.id, 'Trip Approved! 🎉',
         `Vehicle: ${plate} • Driver: ${driverName} • Price: Rs. ${Number(trip.admin_final_price).toLocaleString()}`,
         'trip_approved', req.params.id);
-      // Auto-create ledger entry (trip was quoted, now accepted — entry may not exist yet)
-      const noEntry = await pool.query('SELECT 1 FROM ledger_transactions WHERE trip_id=$1', [trip.id]);
-      if (!noEntry.rows.length && trip.agent_id) {
-        await pool.query(
-          `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
-           VALUES ($1,$2,'credit',$3,$4,'Agent accepted quoted price',$5)`,
-          [trip.agent_id, trip.id, parseFloat(trip.admin_final_price),
-           trip.payment_type === 'cash' ? 'cash' : 'bank_transfer', trip.agent_id]
-        );
+      // Auto-create ledger entry (trip was quoted, now accepted)
+      try {
+        const noEntry = await pool.query('SELECT 1 FROM ledger_transactions WHERE trip_id=$1', [trip.id]);
+        if (!noEntry.rows.length && trip.agent_id && trip.admin_final_price) {
+          await pool.query(
+            `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
+             VALUES ($1,$2,'credit',$3,$4,'Agent accepted quoted price',$5)`,
+            [trip.agent_id, trip.id, parseFloat(trip.admin_final_price),
+             trip.payment_type === 'cash' ? 'cash' : 'bank_transfer', trip.agent_id]
+          );
+        }
+      } catch (ledgerErr) {
+        console.error('Ledger insert skipped:', ledgerErr.message);
       }
     }
 

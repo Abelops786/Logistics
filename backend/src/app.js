@@ -59,7 +59,7 @@ app.get('/test-whatsapp', async (req, res) => {
   }
 
   const results = [
-    await send('template_4__abel_trip_approved', ['ABC-1234', 'Muhammad Usman', '45,000', 'Karachi to Lahore']).then(r => ({ template: 'template_4__abel_trip_approved', ...r })),
+    await send('template_4b1', ['ABC-1234', 'Muhammad Usman', '45,000', 'Karachi to Lahore']).then(r => ({ template: 'template_4b1', ...r })),
   ];
 
   res.json({ results });

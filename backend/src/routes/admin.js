@@ -551,23 +551,27 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
 
     // Auto-create ledger entries when trip is directly approved (no counter offer)
     if (newStatus === 'approved') {
-      const noEntry = await pool.query('SELECT 1 FROM ledger_transactions WHERE trip_id=$1', [trip.id]);
-      if (!noEntry.rows.length && trip.agent_id) {
-        await pool.query(
-          `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
-           VALUES ($1,$2,'credit',$3,$4,'Trip approved',$5)`,
-          [trip.agent_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
-        );
-      }
-      if (trip.client_id) {
-        const noClientEntry = await pool.query('SELECT 1 FROM client_ledger_transactions WHERE trip_id=$1', [trip.id]);
-        if (!noClientEntry.rows.length) {
+      try {
+        const noEntry = await pool.query('SELECT 1 FROM ledger_transactions WHERE trip_id=$1', [trip.id]);
+        if (!noEntry.rows.length && trip.agent_id) {
           await pool.query(
-            `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
-             VALUES ($1,$2,'invoice',$3,$4,'Trip invoiced',$5)`,
-            [trip.client_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
+            `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
+             VALUES ($1,$2,'credit',$3,$4,'Trip approved',$5)`,
+            [trip.agent_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
           );
         }
+        if (trip.client_id) {
+          const noClientEntry = await pool.query('SELECT 1 FROM client_ledger_transactions WHERE trip_id=$1', [trip.id]);
+          if (!noClientEntry.rows.length) {
+            await pool.query(
+              `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
+               VALUES ($1,$2,'invoice',$3,$4,'Trip invoiced',$5)`,
+              [trip.client_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
+            );
+          }
+        }
+      } catch (ledgerErr) {
+        console.error('Ledger insert skipped:', ledgerErr.message);
       }
     }
 
@@ -678,19 +682,23 @@ router.post('/trips/:id/penalty', ...isAdmin, async (req, res) => {
     }
 
     // Ledger entries for penalty
-    if (trip.agent_id) {
-      await pool.query(
-        `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
-         VALUES ($1,$2,'credit',$3,'adjustment','Detention penalty',$4)`,
-        [trip.agent_id, trip.id, parseFloat(penalty_amount), req.user.id]
-      );
-    }
-    if (trip.client_id) {
-      await pool.query(
-        `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
-         VALUES ($1,$2,'invoice',$3,'adjustment','Detention penalty',$4)`,
-        [trip.client_id, trip.id, parseFloat(penalty_amount), req.user.id]
-      );
+    try {
+      if (trip.agent_id) {
+        await pool.query(
+          `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
+           VALUES ($1,$2,'credit',$3,'adjustment','Detention penalty',$4)`,
+          [trip.agent_id, trip.id, parseFloat(penalty_amount), req.user.id]
+        );
+      }
+      if (trip.client_id) {
+        await pool.query(
+          `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
+           VALUES ($1,$2,'invoice',$3,'adjustment','Detention penalty',$4)`,
+          [trip.client_id, trip.id, parseFloat(penalty_amount), req.user.id]
+        );
+      }
+    } catch (ledgerErr) {
+      console.error('Ledger insert skipped:', ledgerErr.message);
     }
 
     res.json({ message: 'Penalty applied and agent notified', trip });
@@ -856,12 +864,16 @@ router.post('/trips/create', ...isAdmin, async (req, res) => {
     );
     const trip = rows[0];
     // Auto-invoice client ledger for admin-created trips
-    if (trip.client_id) {
-      await pool.query(
-        `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
-         VALUES ($1,$2,'invoice',$3,$4,'Admin-created trip',$5)`,
-        [trip.client_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
-      );
+    try {
+      if (trip.client_id) {
+        await pool.query(
+          `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
+           VALUES ($1,$2,'invoice',$3,$4,'Admin-created trip',$5)`,
+          [trip.client_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
+        );
+      }
+    } catch (ledgerErr) {
+      console.error('Ledger insert skipped:', ledgerErr.message);
     }
     res.status(201).json({ message: 'Trip created', trip });
   } catch (err) {
