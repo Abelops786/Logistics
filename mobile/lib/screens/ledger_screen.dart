@@ -11,11 +11,37 @@ class LedgerScreen extends StatefulWidget {
 }
 
 class _LedgerScreenState extends State<LedgerScreen> {
+  final _scrollCtrl = ScrollController();
+  final Map<String, GlobalKey> _itemKeys = {};
+  String? _lastHighlight;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AppProvider>().loadLedger();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  void _maybeScrollToHighlight(String? highlightId) {
+    if (highlightId == null || highlightId == _lastHighlight) return;
+    _lastHighlight = highlightId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = _itemKeys[highlightId];
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+          alignment: 0.2,
+        );
+      }
     });
   }
 
@@ -36,12 +62,12 @@ class _LedgerScreenState extends State<LedgerScreen> {
         builder: (context, provider, _) {
           final summary = provider.ledgerSummary;
           final trips = provider.trips;
-          // ListView.builder renders only visible items — critical for older phones
+          _maybeScrollToHighlight(provider.highlightTripId);
           return RefreshIndicator(
             onRefresh: provider.loadLedger,
             child: ListView.builder(
+              controller: _scrollCtrl,
               padding: const EdgeInsets.all(16),
-              // slots: 0=summary, 1=header, 2..N=trips (or empty state at slot 2)
               itemCount: trips.isEmpty ? 3 : trips.length + 2,
               itemBuilder: (context, index) {
                 if (index == 0) {
@@ -65,9 +91,11 @@ class _LedgerScreenState extends State<LedgerScreen> {
                   );
                 }
                 final trip = trips[index - 2];
-                // RepaintBoundary isolates each card's repaint layer
+                final key = _itemKeys.putIfAbsent(trip.id, () => GlobalKey());
                 return RepaintBoundary(
-                  child: _tripCard(context, trip, provider),
+                  key: key,
+                  child: _tripCard(context, trip, provider,
+                      highlighted: provider.highlightTripId == trip.id),
                 );
               },
             ),
@@ -120,20 +148,28 @@ class _LedgerScreenState extends State<LedgerScreen> {
     'not_complete': Colors.deepOrange,
   };
 
-  Widget _tripCard(BuildContext context, Trip trip, AppProvider provider) {
+  Widget _tripCard(BuildContext context, Trip trip, AppProvider provider,
+      {bool highlighted = false}) {
     final color = _statusColors[trip.status] ?? Colors.grey;
 
     return GestureDetector(
-      onTap: () => _showDetail(context, trip),
+      onTap: () {
+        if (highlighted) provider.setHighlightTripId(null);
+        _showDetail(context, trip);
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: highlighted ? Colors.amber.shade50 : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: trip.status == 'quoted' ? Colors.purple.shade300 : Colors.grey.shade200,
-            width: trip.status == 'quoted' ? 2 : 1,
+            color: highlighted
+                ? Colors.amber.shade600
+                : trip.status == 'quoted'
+                    ? Colors.purple.shade300
+                    : Colors.grey.shade200,
+            width: highlighted || trip.status == 'quoted' ? 2 : 1,
           ),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

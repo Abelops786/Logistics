@@ -504,18 +504,13 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
   }
 
   try {
-    // If agent submitted a counter offer, set status to 'quoted' — agent must confirm
-    const tripCheck = await pool.query('SELECT agent_requested_price FROM trips WHERE id = $1', [req.params.id]);
-    const hasCounterOffer = tripCheck.rows[0]?.agent_requested_price != null;
-    const newStatus = hasCounterOffer ? 'quoted' : 'approved';
-
     const { rows } = await pool.query(
       `UPDATE trips
        SET admin_final_price = $1, vehicle_id = $2, driver_id = $3, payment_type = $4,
-           status = $5, updated_at = NOW()
-       WHERE id = $6
+           status = 'quoted', updated_at = NOW()
+       WHERE id = $5
        RETURNING *`,
-      [final_price, vehicle_id, driver_id, payment_type, newStatus, req.params.id]
+      [final_price, vehicle_id, driver_id, payment_type, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Trip not found' });
 
@@ -531,51 +526,14 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
         ? trip.dropoff_locations.join(' → ')
         : JSON.parse(trip.dropoff_locations).join(' → ');
       const route = `${trip.pickup_location} → ${drops}`;
-      const plate = vehicleRow.rows[0]?.plate_number || '';
-      const driverName = driverRow.rows[0]?.name || '';
-
-      if (newStatus === 'quoted') {
-        await sendQuotedNotification(agentRow.rows[0].phone, agentRow.rows[0].name, route, final_price);
-        await notify(trip.agent_id,
-          'Admin Quoted a Price',
-          `Rs. ${Number(final_price).toLocaleString()} for your trip: ${route}. Please Accept or Reject.`,
-          'trip_quoted', trip.id);
-      } else {
-        await sendWhatsApp(agentRow.rows[0].phone, [agentRow.rows[0].name, route, String(final_price), plate, driverName]);
-        await notify(trip.agent_id,
-          'Trip Approved! 🎉',
-          `Vehicle: ${plate} • Driver: ${driverName} • Final Price: Rs. ${Number(final_price).toLocaleString()}`,
-          'trip_approved', trip.id);
-      }
+      await sendQuotedNotification(agentRow.rows[0].phone, agentRow.rows[0].name, route, final_price);
+      await notify(trip.agent_id,
+        'Admin Quoted a Price',
+        `Rs. ${Number(final_price).toLocaleString()} for your trip: ${route}. Please Accept or Reject.`,
+        'trip_quoted', trip.id);
     }
 
-    // Auto-create ledger entries when trip is directly approved (no counter offer)
-    if (newStatus === 'approved') {
-      try {
-        const noEntry = await pool.query('SELECT 1 FROM ledger_transactions WHERE trip_id=$1', [trip.id]);
-        if (!noEntry.rows.length && trip.agent_id) {
-          await pool.query(
-            `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
-             VALUES ($1,$2,'credit',$3,$4,'Trip approved',$5)`,
-            [trip.agent_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
-          );
-        }
-        if (trip.client_id) {
-          const noClientEntry = await pool.query('SELECT 1 FROM client_ledger_transactions WHERE trip_id=$1', [trip.id]);
-          if (!noClientEntry.rows.length) {
-            await pool.query(
-              `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
-               VALUES ($1,$2,'invoice',$3,$4,'Trip invoiced',$5)`,
-              [trip.client_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
-            );
-          }
-        }
-      } catch (ledgerErr) {
-        console.error('Ledger insert skipped:', ledgerErr.message);
-      }
-    }
-
-    res.json({ message: newStatus === 'quoted' ? 'Price quoted, awaiting agent confirmation' : 'Trip approved', trip });
+    res.json({ message: 'Price quoted, awaiting agent confirmation', trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });

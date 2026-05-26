@@ -15,6 +15,7 @@ class AppProvider extends ChangeNotifier {
   int _unreadCount = 0;
   Timer? _pollTimer;
   String? blockedMessage;
+  String? _highlightTripId;
 
   User? get user => _user;
   String? get token => _token;
@@ -23,6 +24,12 @@ class AppProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get notifications => _notifications;
   int get unreadCount => _unreadCount;
   bool get isLoggedIn => _token != null && _user != null;
+  String? get highlightTripId => _highlightTripId;
+
+  void setHighlightTripId(String? id) {
+    _highlightTripId = id;
+    notifyListeners();
+  }
 
   Future<void> loadSession() async {
     final prefs = await SharedPreferences.getInstance();

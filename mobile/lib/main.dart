@@ -89,8 +89,13 @@ class _HomeShellState extends State<HomeShell> {
                     context,
                     MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                   );
-                  if (result != null && result['switchTab'] != null && mounted) {
-                    setState(() => _tab = result['switchTab'] as int);
+                  if (result != null && mounted) {
+                    if (result['switchTab'] != null) {
+                      setState(() => _tab = result['switchTab'] as int);
+                    }
+                    if (result['trip_id'] != null) {
+                      context.read<AppProvider>().setHighlightTripId(result['trip_id'].toString());
+                    }
                   }
                 },
               ),
