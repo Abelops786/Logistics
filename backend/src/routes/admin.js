@@ -1042,4 +1042,22 @@ router.post('/clients/:id/ledger-adjustment', ...isAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/test-whatsapp — send a test message to verify template works
+router.post('/test-whatsapp', ...isAdmin, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ message: 'phone is required' });
+  try {
+    await sendWhatsApp(phone, [
+      'Test Agent',
+      'Karachi → Lahore',
+      '50000',
+      'TEST-1234',
+      'Test Driver',
+    ]);
+    res.json({ message: `Test WhatsApp sent to ${phone} using template_4b1` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

@@ -52,7 +52,7 @@ async function sendWhatsApp(toPhone, variables) {
 
   if (plateNumber && driverName && price) {
     // Trip approved → agent: {{1}}=Vehicle {{2}}=Driver {{3}}=Price {{4}}=Route
-    await _sendTemplate(toPhone, 'template_4__abel_trip_approved', [
+    await _sendTemplate(toPhone, 'template_4b1', [
       plateNumber, driverName, Number(price).toLocaleString(), route,
     ]);
   } else {
