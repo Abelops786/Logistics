@@ -163,7 +163,8 @@ export default function ClientProfilePage() {
         amount: tx.amount,
         payment_mode: tx.payment_mode || 'bank_transfer',
         reference_number: '',
-        internal_notes: `Reversal of: ${tx.internal_notes || label}`,
+        // embed original ID so we can detect duplicate reversals: "Reversal of:||<id>| <note>"
+        internal_notes: `Reversal of:||${tx.id}| ${tx.internal_notes || label}`,
       });
       load(ledgerFrom || undefined, ledgerTo || undefined);
     } catch (err) {
@@ -312,45 +313,58 @@ export default function ClientProfilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map((tx) => {
-                      const isCharge = tx.transaction_type !== 'payment';
-                      const isReversal = tx.internal_notes?.startsWith('Reversal of:');
-                      return (
-                        <tr key={tx.id} className={`border-t border-gray-50 hover:bg-gray-50 ${isReversal ? 'opacity-60' : ''}`}>
-                          <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{tx.created_at?.slice(0, 10)}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TX_COLORS[tx.transaction_type] || 'bg-gray-100 text-gray-600'}`}>
-                              {TX_LABELS[tx.transaction_type] || tx.transaction_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-600 max-w-xs">
-                            <p>{tx.internal_notes || '—'}</p>
-                            {tx.pickup_location && <p className="text-gray-400 truncate">{tx.pickup_location}</p>}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-500">
-                            <p className="capitalize">{tx.payment_mode?.replace('_', ' ')}</p>
-                            {tx.reference_number && <p className="text-gray-400">{tx.reference_number}</p>}
-                          </td>
-                          <td className={`px-4 py-3 text-right text-xs font-semibold ${isCharge ? 'text-orange-600' : 'text-green-600'}`}>
-                            {isCharge ? '+' : '-'}{fmtMoney(tx.amount)}
-                          </td>
-                          <td className={`px-4 py-3 text-right text-xs font-bold ${tx.running_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {fmtMoney(tx.running_balance)}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-400">{tx.processed_by_name || '—'}</td>
-                          <td className="px-4 py-3">
-                            {!isReversal && (
-                              <button
-                                onClick={() => handleReverse(tx)}
-                                disabled={reversing === tx.id}
-                                className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 whitespace-nowrap">
-                                {reversing === tx.id ? '...' : 'Reverse'}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
+                    {(() => {
+                      // Build set of transaction IDs that already have a reversal entry
+                      const reversedIds = new Set(
+                        transactions
+                          .filter((tx) => tx.internal_notes?.startsWith('Reversal of:||'))
+                          .map((tx) => tx.internal_notes.split('||')[1])
                       );
-                    })}
+                      return transactions.map((tx) => {
+                        const isCharge = tx.transaction_type !== 'payment';
+                        const isReversal = tx.internal_notes?.startsWith('Reversal of:||');
+                        const alreadyReversed = reversedIds.has(tx.id);
+                        const canReverse = !isReversal && !alreadyReversed;
+                        return (
+                          <tr key={tx.id} className={`border-t border-gray-50 hover:bg-gray-50 ${isReversal ? 'opacity-55' : ''}`}>
+                            <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{tx.created_at?.slice(0, 10)}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TX_COLORS[tx.transaction_type] || 'bg-gray-100 text-gray-600'}`}>
+                                {TX_LABELS[tx.transaction_type] || tx.transaction_type}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-600 max-w-xs">
+                              <p>{isReversal ? tx.internal_notes.replace(/^Reversal of:\|\|[^|]+\|/, 'Reversal of: ') : (tx.internal_notes || '—')}</p>
+                              {tx.pickup_location && <p className="text-gray-400 truncate">{tx.pickup_location}</p>}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-500">
+                              <p className="capitalize">{tx.payment_mode?.replace('_', ' ')}</p>
+                              {tx.reference_number && <p className="text-gray-400">{tx.reference_number}</p>}
+                            </td>
+                            <td className={`px-4 py-3 text-right text-xs font-semibold ${isCharge ? 'text-orange-600' : 'text-green-600'}`}>
+                              {isCharge ? '+' : '-'}{fmtMoney(tx.amount)}
+                            </td>
+                            <td className={`px-4 py-3 text-right text-xs font-bold ${tx.running_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {fmtMoney(tx.running_balance)}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-400">{tx.processed_by_name || '—'}</td>
+                            <td className="px-4 py-3">
+                              {canReverse && (
+                                <button
+                                  onClick={() => handleReverse(tx)}
+                                  disabled={reversing === tx.id}
+                                  className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 whitespace-nowrap">
+                                  {reversing === tx.id ? '...' : 'Reverse'}
+                                </button>
+                              )}
+                              {alreadyReversed && (
+                                <span className="text-xs text-gray-400 italic">Reversed</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
