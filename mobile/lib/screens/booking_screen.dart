@@ -14,52 +14,15 @@ class _BookingScreenState extends State<BookingScreen> {
   String _pickupLocation = '';
   final List<String> _dropoffLocations = [''];
   String _containerType = '50ft_22_wheeler';
-
-  double? _estimateLow;
-  double? _estimateHigh;
-  double? _totalKm;
-  bool _isFixedPrice = false;
-  List<dynamic> _legs = [];
-  String _distanceSource = '';
-  bool _estimating = false;
   bool _counterOffer = false;
   final _counterPriceCtrl = TextEditingController();
   bool _submitting = false;
-  int _formKey = 0; // increment to force LocationPicker widgets to reset
+  int _formKey = 0;
 
   final _containerLabels = {
     '50ft_22_wheeler': '50ft 14-Wheeler Container',
     '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo Container',
   };
-
-  Future<void> _fetchEstimate() async {
-    final pickup = _pickupLocation.trim();
-    final drops = _dropoffLocations.where((s) => s.isNotEmpty).toList();
-    if (pickup.isEmpty || drops.isEmpty) return;
-
-    setState(() { _estimating = true; _estimateLow = null; _estimateHigh = null; });
-    try {
-      final res = await ApiService.post('/api/trips/estimate', {
-        'pickup_location': pickup,
-        'dropoff_locations': drops,
-        'container_type': _containerType,
-      });
-      if (res['estimate_low'] != null) {
-        setState(() {
-          _estimateLow = double.tryParse(res['estimate_low'].toString());
-          _estimateHigh = double.tryParse(res['estimate_high'].toString());
-          _isFixedPrice = res['is_fixed'] == true;
-          _totalKm = res['total_km'] != null ? double.tryParse(res['total_km'].toString()) : null;
-          _legs = res['legs'] as List? ?? [];
-          _distanceSource = res['source']?.toString() ?? '';
-        });
-      }
-    } catch (e) {
-      // Estimate failed silently — user can still submit without estimate
-    } finally {
-      setState(() => _estimating = false);
-    }
-  }
 
   Future<void> _submitRequest() async {
     final pickup = _pickupLocation.trim();
@@ -76,7 +39,6 @@ class _BookingScreenState extends State<BookingScreen> {
         'pickup_location': pickup,
         'dropoff_locations': drops,
         'container_type': _containerType,
-        if (_estimateLow != null) 'system_estimated_price': ((_estimateLow! + _estimateHigh!) / 2).round(),
         if (_counterOffer && _counterPriceCtrl.text.isNotEmpty)
           'agent_requested_price': int.tryParse(_counterPriceCtrl.text),
       };
@@ -102,14 +64,8 @@ class _BookingScreenState extends State<BookingScreen> {
     _counterPriceCtrl.clear();
     setState(() {
       _pickupLocation = '';
-      _estimateLow = null;
-      _estimateHigh = null;
-      _totalKm = null;
-      _isFixedPrice = false;
-      _legs = [];
-      _distanceSource = '';
       _counterOffer = false;
-      _formKey++; // forces LocationPicker widgets to fully rebuild
+      _formKey++;
     });
   }
 
@@ -138,7 +94,7 @@ class _BookingScreenState extends State<BookingScreen> {
             const SizedBox(height: 16),
             _section('Container Type', _buildVehicleSection()),
             const SizedBox(height: 16),
-            _section('Price Estimation', _buildPricingSection()),
+            _section('Client Budget', _buildBudgetSection()),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -182,10 +138,7 @@ class _BookingScreenState extends State<BookingScreen> {
           icon: Icons.radio_button_checked,
           iconColor: Colors.green,
           initialValue: _pickupLocation,
-          onLocationSelected: (val) {
-            setState(() => _pickupLocation = val);
-            _fetchEstimate();
-          },
+          onLocationSelected: (val) => setState(() => _pickupLocation = val),
         ),
         const SizedBox(height: 10),
         ...List.generate(_dropoffLocations.length, (i) => Padding(
@@ -198,10 +151,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 icon: Icons.location_on,
                 iconColor: Colors.red,
                 initialValue: _dropoffLocations[i],
-                onLocationSelected: (val) {
-                  setState(() => _dropoffLocations[i] = val);
-                  _fetchEstimate();
-                },
+                onLocationSelected: (val) => setState(() => _dropoffLocations[i] = val),
               ),
             ),
             if (_dropoffLocations.length > 1) ...[
@@ -228,10 +178,7 @@ class _BookingScreenState extends State<BookingScreen> {
       children: _containerLabels.entries.map((entry) {
         final selected = _containerType == entry.key;
         return GestureDetector(
-          onTap: () {
-            setState(() => _containerType = entry.key);
-            _fetchEstimate();
-          },
+          onTap: () => setState(() => _containerType = entry.key),
           child: Container(
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(14),
@@ -252,69 +199,14 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _buildPricingSection() {
+  Widget _buildBudgetSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_estimating)
-          const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator())),
-        if (_estimateLow != null && !_estimating)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Text(
-                  _isFixedPrice ? 'Fixed Route Price' : 'System Estimate',
-                  style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 8),
-                if (_isFixedPrice)
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
-                    child: Text('Fixed', style: TextStyle(fontSize: 10, color: Colors.orange.shade800, fontWeight: FontWeight.w600))),
-                if (!_isFixedPrice && _distanceSource == 'google')
-                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(4)),
-                    child: Text('Google Maps', style: TextStyle(fontSize: 10, color: Colors.blue.shade700))),
-              ]),
-              const SizedBox(height: 4),
-              Text(
-                _isFixedPrice
-                    ? 'Rs. ${_estimateLow!.toStringAsFixed(0)}'
-                    : 'Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green.shade700),
-              ),
-              if (!_isFixedPrice && _totalKm != null)
-                Text('Total distance: ${_totalKm!.toStringAsFixed(1)} km',
-                  style: TextStyle(fontSize: 11, color: Colors.green.shade600)),
-              if (!_isFixedPrice && _legs.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Divider(height: 1),
-                const SizedBox(height: 6),
-                ..._legs.map((leg) => Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Row(children: [
-                    const Icon(Icons.arrow_right, size: 14, color: Colors.grey),
-                    Expanded(child: Text(
-                      '${leg['from']?.toString().split(',')[0] ?? ''} → ${leg['to']?.toString().split(',')[0] ?? ''}',
-                      style: const TextStyle(fontSize: 11, color: Colors.black54),
-                      overflow: TextOverflow.ellipsis,
-                    )),
-                    Text('${leg['distance_km']} km', style: const TextStyle(fontSize: 11, color: Colors.black45)),
-                  ]),
-                )),
-              ],
-            ]),
-          ),
-        if (_estimateLow == null && !_estimating)
-          Text('Fill route details to see estimate', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
-        const SizedBox(height: 16),
         CheckboxListTile(
           value: _counterOffer,
           onChanged: (v) => setState(() => _counterOffer = v ?? false),
-          title: const Text('Client has a different budget?', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          title: const Text('Client has a specific budget?', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
           controlAffinity: ListTileControlAffinity.leading,
           contentPadding: EdgeInsets.zero,
         ),
@@ -324,21 +216,23 @@ class _BookingScreenState extends State<BookingScreen> {
             controller: _counterPriceCtrl,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              labelText: 'Enter Client Offered Price (PKR)',
+              labelText: 'Client Offered Price (PKR)',
               prefixText: 'Rs. ',
               filled: true,
               fillColor: Colors.grey.shade50,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-              helperText: _estimateLow != null
-                  ? (_isFixedPrice
-                      ? 'Fixed route price is Rs. ${_estimateLow!.toStringAsFixed(0)}'
-                      : 'Estimated range: Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}')
-                  : 'Get estimate first',
-              helperStyle: TextStyle(fontSize: 11, color: Colors.orange.shade700),
             ),
           ),
         ],
+        if (!_counterOffer)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Leave unchecked if client accepts admin pricing.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
+          ),
       ],
     );
   }
