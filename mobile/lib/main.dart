@@ -84,7 +84,15 @@ class _HomeShellState extends State<HomeShell> {
             children: [
               IconButton(
                 icon: const Icon(Icons.notifications_outlined),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+                onPressed: () async {
+                  final result = await Navigator.push<Map<String, dynamic>>(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  );
+                  if (result != null && result['switchTab'] != null && mounted) {
+                    setState(() => _tab = result['switchTab'] as int);
+                  }
+                },
               ),
               Consumer<AppProvider>(
                 builder: (_, provider, __) {

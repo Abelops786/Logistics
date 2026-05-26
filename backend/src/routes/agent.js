@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { notify } = require('../services/notifyAgent');
-const { sendAdminAlert } = require('../services/notificationService');
+const { sendAdminAlert, sendWhatsApp } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -60,18 +60,6 @@ router.post('/trips/:id/counter', authenticate, requireRole('agent'), async (req
       return res.status(400).json({ message: 'You have already used your one re-price. You can only Accept or Reject now.' });
     }
 
-    // Validate new price is within system estimated range
-    const sysEstimate = parseFloat(tripCheck.rows[0].system_estimated_price);
-    if (sysEstimate > 0) {
-      const low = Math.round(sysEstimate * 0.9);
-      const high = Math.round(sysEstimate * 1.1);
-      if (new_price < low || new_price > high) {
-        return res.status(400).json({
-          message: `Price must be between Rs. ${low.toLocaleString()} and Rs. ${high.toLocaleString()}.`,
-        });
-      }
-    }
-
     const { rows } = await pool.query(
       `UPDATE trips SET agent_requested_price = $1, admin_final_price = NULL,
        status = 'pending', agent_repriced = TRUE, updated_at = NOW() WHERE id = $2 RETURNING *`,
@@ -116,6 +104,20 @@ router.post('/trips/:id/confirm', authenticate, requireRole('agent'), async (req
 
     if (newStatus === 'rejected') {
       await notify(req.user.id, 'Trip Rejected', 'You rejected the admin\'s quoted price. You can submit a new trip request.', 'trip_rejected', req.params.id);
+    } else {
+      // Agent accepted — send WhatsApp with vehicle & driver details
+      const [vRow, dRow] = await Promise.all([
+        pool.query('SELECT plate_number FROM vehicles WHERE id=$1', [trip.vehicle_id]),
+        pool.query('SELECT name FROM drivers WHERE id=$1', [trip.driver_id]),
+      ]);
+      const plate = vRow.rows[0]?.plate_number || '';
+      const driverName = dRow.rows[0]?.name || '';
+      if (req.user.phone) {
+        await sendWhatsApp(req.user.phone, [req.user.name, route, String(trip.admin_final_price), plate, driverName]);
+      }
+      await notify(req.user.id, 'Trip Approved! 🎉',
+        `Vehicle: ${plate} • Driver: ${driverName} • Price: Rs. ${Number(trip.admin_final_price).toLocaleString()}`,
+        'trip_approved', req.params.id);
     }
 
     // Notify admin via WhatsApp

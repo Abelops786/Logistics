@@ -23,6 +23,163 @@ const STATUS_COLORS = {
   not_complete: 'bg-orange-100 text-orange-800',
 };
 
+// ── Create Trip Modal (Admin) ────────────────────────────────────────────────
+function CreateTripModal({ vehicles, onClose, onCreated }) {
+  const [clients, setClients] = useState([]);
+  const [form, setForm] = useState({
+    client_id: '',
+    client_name: '',
+    client_phone: '',
+    pickup_location: '',
+    dropoff_locations: [''],
+    container_type: '50ft_22_wheeler',
+    final_price: '',
+    vehicle_id: '',
+    payment_type: 'bank',
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/api/admin/clients').then((r) => setClients(r.data)).catch(() => {});
+  }, []);
+
+  function setDrop(i, val) {
+    const drops = [...form.dropoff_locations];
+    drops[i] = val;
+    setForm({ ...form, dropoff_locations: drops });
+  }
+
+  const assignableVehicles = vehicles.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
+  const selectedVehicle = assignableVehicles.find((v) => v.id === form.vehicle_id);
+
+  function selectClient(e) {
+    const id = e.target.value;
+    setForm({ ...form, client_id: id });
+    if (id) {
+      const c = clients.find((cl) => cl.id === id);
+      if (c) setForm((f) => ({ ...f, client_id: id, client_name: c.name, client_phone: c.phone || '' }));
+    }
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    const drops = form.dropoff_locations.filter((d) => d.trim());
+    if (!drops.length) return alert('Add at least one dropoff location');
+    if (!selectedVehicle?.assigned_driver_id) return alert('Selected vehicle has no driver assigned');
+    setLoading(true);
+    try {
+      await api.post('/api/admin/trips/create', {
+        ...form,
+        dropoff_locations: drops,
+        final_price: parseFloat(form.final_price),
+      });
+      onCreated();
+      onClose();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to create trip');
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-auto">
+      <div className="bg-white rounded-lg p-6 max-w-lg w-full my-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800 text-lg">Create Trip (Admin)</h3>
+          <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
+        </div>
+        <form onSubmit={submit} className="space-y-3">
+          {/* Client */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Client (select or enter manually)</label>
+            <select value={form.client_id} onChange={selectClient}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2">
+              <option value="">— Select existing client —</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` • ${c.phone}` : ''}</option>)}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })}
+                placeholder="Client Name" className="border border-gray-300 rounded px-3 py-2 text-sm" />
+              <input value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })}
+                placeholder="Client Phone" className="border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+          {/* Route */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Pickup Location <span className="text-red-500">*</span></label>
+            <input value={form.pickup_location} onChange={(e) => setForm({ ...form, pickup_location: e.target.value })}
+              placeholder="e.g. Karachi Port" required
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+          </div>
+          {form.dropoff_locations.map((d, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input value={d} onChange={(e) => setDrop(i, e.target.value)}
+                placeholder={`Dropoff ${i + 1}`} required
+                className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm" />
+              {form.dropoff_locations.length > 1 && (
+                <button type="button" onClick={() => setForm({ ...form, dropoff_locations: form.dropoff_locations.filter((_, j) => j !== i) })}
+                  className="text-red-400 hover:text-red-600 text-lg">✕</button>
+              )}
+            </div>
+          ))}
+          <button type="button" onClick={() => setForm({ ...form, dropoff_locations: [...form.dropoff_locations, ''] })}
+            className="text-xs text-blue-600 hover:underline">+ Add Dropoff</button>
+          {/* Container & Price */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Container Type</label>
+              <select value={form.container_type} onChange={(e) => setForm({ ...form, container_type: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                {Object.entries(CONTAINER_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Final Price (PKR) <span className="text-red-500">*</span></label>
+              <input type="number" value={form.final_price} onChange={(e) => setForm({ ...form, final_price: e.target.value })}
+                placeholder="e.g. 55000" required min="1"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+          {/* Vehicle */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Vehicle <span className="text-red-500">*</span></label>
+            <select value={form.vehicle_id} onChange={(e) => setForm({ ...form, vehicle_id: e.target.value })} required
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+              <option value="">Select Vehicle</option>
+              {assignableVehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.plate_number} — {containerLabel(v.container_type)}{v.driver_name ? ` (Driver: ${v.driver_name})` : ' ⚠ No driver'}
+                </option>
+              ))}
+            </select>
+            {selectedVehicle && !selectedVehicle.driver_name && (
+              <p className="text-xs text-red-500 mt-1">⚠ No driver assigned — please assign a driver first.</p>
+            )}
+          </div>
+          {/* Payment */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Payment Type</label>
+            <select value={form.payment_type} onChange={(e) => setForm({ ...form, payment_type: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+              <option value="bank">Bank Transfer</option>
+              <option value="cash">Cash</option>
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={loading || !selectedVehicle?.driver_name}
+              className="flex-1 bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? 'Creating...' : '✓ Create Trip'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function AssignModal({ trip, vehicles, onClose, onAssigned }) {
   const [form, setForm] = useState({
     final_price: trip.agent_requested_price || trip.system_estimated_price || '',
@@ -335,6 +492,7 @@ export default function TripsPage() {
   const [completeTrip, setCompleteTrip] = useState(null);
   const [notCompleteTrip, setNotCompleteTrip] = useState(null);
   const [viewTrip, setViewTrip] = useState(null);
+  const [createTrip, setCreateTrip] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
 
   async function load() {
@@ -361,6 +519,11 @@ export default function TripsPage() {
     <Layout>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Trip Requests</h1>
+        <div className="flex gap-3">
+          <button onClick={() => setCreateTrip(true)}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
+            + Create Trip
+          </button>
         <button
           onClick={() => {
             const rows = filtered.map((t) => ({
@@ -381,8 +544,10 @@ export default function TripsPage() {
           }}
           className="px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700 flex items-center gap-2"
         >
+
           ↓ Export CSV
         </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-6 flex-wrap">
@@ -473,6 +638,7 @@ export default function TripsPage() {
         </div>
       )}
 
+      {createTrip && <CreateTripModal vehicles={vehicles} onClose={() => setCreateTrip(false)} onCreated={load} />}
       {assignTrip && <AssignModal trip={assignTrip} vehicles={vehicles} onClose={() => setAssignTrip(null)} onAssigned={load} />}
       {completeTrip && <CompleteModal trip={completeTrip} onClose={() => setCompleteTrip(null)} onDone={load} />}
       {notCompleteTrip && <NotCompleteModal trip={notCompleteTrip} onClose={() => setNotCompleteTrip(null)} onDone={load} />}

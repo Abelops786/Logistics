@@ -662,4 +662,139 @@ router.post('/trips/:id/penalty', ...isAdmin, async (req, res) => {
   }
 });
 
+// ── Clients CRUD ─────────────────────────────────────────────────────────────
+
+router.get('/clients', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM clients ORDER BY name ASC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+router.post('/clients', ...isAdmin, async (req, res) => {
+  const { name, phone, company_name, address, notes } = req.body;
+  if (!name) return res.status(400).json({ message: 'name is required' });
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO clients (name, phone, company_name, address, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [name, phone || null, company_name || null, address || null, notes || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+router.put('/clients/:id', ...isAdmin, async (req, res) => {
+  const { name, phone, company_name, address, notes } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE clients SET name=COALESCE($1,name), phone=COALESCE($2,phone), company_name=COALESCE($3,company_name),
+       address=COALESCE($4,address), notes=COALESCE($5,notes), updated_at=NOW() WHERE id=$6 RETURNING *`,
+      [name || null, phone || null, company_name || null, address || null, notes || null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Client not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+router.delete('/clients/:id', ...isAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE trips SET client_id=NULL WHERE client_id=$1', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM clients WHERE id=$1 RETURNING name', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: 'Client not found' });
+    res.json({ message: `Client "${rows[0].name}" deleted` });
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Route Prices CRUD ─────────────────────────────────────────────────────────
+
+router.get('/route-prices', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM route_prices ORDER BY direction ASC, from_city ASC, to_city ASC'
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+router.post('/route-prices', ...isAdmin, async (req, res) => {
+  const { from_city, to_city, container_type, price, direction, notes } = req.body;
+  if (!from_city || !to_city || !container_type || !price) {
+    return res.status(400).json({ message: 'from_city, to_city, container_type, price are required' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO route_prices (from_city, to_city, container_type, price, direction, notes)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (from_city, to_city, container_type)
+       DO UPDATE SET price=$4, direction=$5, notes=$6, updated_at=NOW()
+       RETURNING *`,
+      [from_city.trim(), to_city.trim(), container_type, parseFloat(price), direction || 'from_karachi', notes || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ message: 'Server error', detail: err.message }); }
+});
+
+router.put('/route-prices/:id', ...isAdmin, async (req, res) => {
+  const { from_city, to_city, container_type, price, direction, notes } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE route_prices SET from_city=COALESCE($1,from_city), to_city=COALESCE($2,to_city),
+       container_type=COALESCE($3,container_type), price=COALESCE($4,price),
+       direction=COALESCE($5,direction), notes=COALESCE($6,notes), updated_at=NOW()
+       WHERE id=$7 RETURNING *`,
+      [from_city||null, to_city||null, container_type||null, price?parseFloat(price):null, direction||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Route price not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+router.delete('/route-prices/:id', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('DELETE FROM route_prices WHERE id=$1 RETURNING from_city, to_city', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: 'Route not found' });
+    res.json({ message: `Route ${rows[0].from_city} → ${rows[0].to_city} deleted` });
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Admin Create Trip ─────────────────────────────────────────────────────────
+
+router.post('/trips/create', ...isAdmin, async (req, res) => {
+  const { client_id, client_name, client_phone, pickup_location, dropoff_locations,
+          container_type, final_price, vehicle_id, payment_type } = req.body;
+
+  if (!pickup_location || !dropoff_locations?.length || !container_type || !final_price || !vehicle_id || !payment_type) {
+    return res.status(400).json({ message: 'pickup_location, dropoff_locations, container_type, final_price, vehicle_id, payment_type are required' });
+  }
+
+  try {
+    const vRow = await pool.query('SELECT assigned_driver_id, plate_number FROM vehicles WHERE id=$1', [vehicle_id]);
+    if (!vRow.rows.length) return res.status(400).json({ message: 'Vehicle not found' });
+    const driver_id = vRow.rows[0].assigned_driver_id;
+    if (!driver_id) return res.status(400).json({ message: 'Selected vehicle has no driver assigned.' });
+
+    const { rows } = await pool.query(
+      `INSERT INTO trips (client_id, client_name, client_phone, pickup_location, dropoff_locations,
+        container_type, admin_final_price, vehicle_id, driver_id, payment_type, status, system_estimated_price)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'approved',$7) RETURNING *`,
+      [
+        client_id || null,
+        client_name || null,
+        client_phone || null,
+        pickup_location,
+        JSON.stringify(dropoff_locations),
+        container_type,
+        parseFloat(final_price),
+        vehicle_id,
+        driver_id,
+        payment_type,
+      ]
+    );
+    res.status(201).json({ message: 'Trip created', trip: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

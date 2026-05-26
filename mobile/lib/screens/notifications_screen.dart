@@ -33,6 +33,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     'account_approved': Colors.blue,
   };
 
+  bool _isTripNotif(String type) =>
+      type == 'trip_quoted' || type == 'trip_approved' || type == 'trip_rejected';
+
+  void _handleTap(Map<String, dynamic> n) {
+    final type = n['type'] as String? ?? '';
+    if (_isTripNotif(type) && n['trip_id'] != null) {
+      // Pop back to HomeShell and signal to switch to Ledger tab (index 1)
+      Navigator.of(context).pop({'switchTab': 1, 'trip_id': n['trip_id']});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,34 +76,45 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               final isRead = n['is_read'] == true;
               final color = _typeColors[type] ?? Colors.grey;
               final icon = _typeIcons[type] ?? Icons.notifications;
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: isRead ? Colors.white : color.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isRead ? Colors.grey.shade200 : color.withOpacity(0.3)),
-                ),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(icon, color: color, size: 20),
+              final tappable = _isTripNotif(type) && n['trip_id'] != null;
+
+              return GestureDetector(
+                onTap: tappable ? () => _handleTap(n) : null,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isRead ? Colors.white : color.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: isRead ? Colors.grey.shade200 : color.withOpacity(0.3)),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Expanded(child: Text(n['title'] ?? '', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: isRead ? Colors.black87 : Colors.black))),
-                      if (!isRead) Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-                    ]),
-                    const SizedBox(height: 4),
-                    Text(n['body'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    const SizedBox(height: 4),
-                    Text(
-                      (n['created_at'] as String?)?.substring(0, 16).replaceFirst('T', ' ') ?? '',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Icon(icon, color: color, size: 20),
                     ),
-                  ])),
-                ]),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Expanded(child: Text(n['title'] ?? '', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: isRead ? Colors.black87 : Colors.black))),
+                        if (!isRead) Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text(n['body'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        Expanded(
+                          child: Text(
+                            (n['created_at'] as String?)?.substring(0, 16).replaceFirst('T', ' ') ?? '',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                          ),
+                        ),
+                        if (tappable)
+                          Text('Tap to view →', style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+                      ]),
+                    ])),
+                  ]),
+                ),
               );
             },
           );

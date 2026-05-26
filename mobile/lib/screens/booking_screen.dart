@@ -18,6 +18,7 @@ class _BookingScreenState extends State<BookingScreen> {
   double? _estimateLow;
   double? _estimateHigh;
   double? _totalKm;
+  bool _isFixedPrice = false;
   List<dynamic> _legs = [];
   String _distanceSource = '';
   bool _estimating = false;
@@ -27,8 +28,8 @@ class _BookingScreenState extends State<BookingScreen> {
   int _formKey = 0; // increment to force LocationPicker widgets to reset
 
   final _containerLabels = {
-    '50ft_22_wheeler': '50ft 22-Wheeler Container',
-    '47ft_22_wheeler_jumbo': '47ft 22-Wheeler Jumbo Container',
+    '50ft_22_wheeler': '50ft 14-Wheeler Container',
+    '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo Container',
   };
 
   Future<void> _fetchEstimate() async {
@@ -47,7 +48,8 @@ class _BookingScreenState extends State<BookingScreen> {
         setState(() {
           _estimateLow = double.tryParse(res['estimate_low'].toString());
           _estimateHigh = double.tryParse(res['estimate_high'].toString());
-          _totalKm = double.tryParse(res['total_km'].toString());
+          _isFixedPrice = res['is_fixed'] == true;
+          _totalKm = res['total_km'] != null ? double.tryParse(res['total_km'].toString()) : null;
           _legs = res['legs'] as List? ?? [];
           _distanceSource = res['source']?.toString() ?? '';
         });
@@ -66,17 +68,6 @@ class _BookingScreenState extends State<BookingScreen> {
     if (pickup.isEmpty || drops.isEmpty) {
       _showErr('Please fill pickup and at least one dropoff location.');
       return;
-    }
-
-    // Validate counter offer is within estimate range
-    if (_counterOffer && _counterPriceCtrl.text.isNotEmpty && _estimateLow != null) {
-      final offered = int.tryParse(_counterPriceCtrl.text) ?? 0;
-      if (offered < _estimateLow! || offered > _estimateHigh!) {
-        _showErr(
-          'Client price must be between Rs. ${_estimateLow!.toStringAsFixed(0)} and Rs. ${_estimateHigh!.toStringAsFixed(0)}.',
-        );
-        return;
-      }
     }
 
     setState(() => _submitting = true);
@@ -114,6 +105,7 @@ class _BookingScreenState extends State<BookingScreen> {
       _estimateLow = null;
       _estimateHigh = null;
       _totalKm = null;
+      _isFixedPrice = false;
       _legs = [];
       _distanceSource = '';
       _counterOffer = false;
@@ -273,23 +265,31 @@ class _BookingScreenState extends State<BookingScreen> {
             decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Text('System Estimate', style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                Text(
+                  _isFixedPrice ? 'Fixed Route Price' : 'System Estimate',
+                  style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(width: 8),
-                if (_distanceSource == 'google')
+                if (_isFixedPrice)
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
+                    child: Text('Fixed', style: TextStyle(fontSize: 10, color: Colors.orange.shade800, fontWeight: FontWeight.w600))),
+                if (!_isFixedPrice && _distanceSource == 'google')
                   Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(4)),
                     child: Text('Google Maps', style: TextStyle(fontSize: 10, color: Colors.blue.shade700))),
               ]),
               const SizedBox(height: 4),
               Text(
-                'Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}',
+                _isFixedPrice
+                    ? 'Rs. ${_estimateLow!.toStringAsFixed(0)}'
+                    : 'Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green.shade700),
               ),
-              if (_totalKm != null)
+              if (!_isFixedPrice && _totalKm != null)
                 Text('Total distance: ${_totalKm!.toStringAsFixed(1)} km',
                   style: TextStyle(fontSize: 11, color: Colors.green.shade600)),
-              // Per-leg breakdown
-              if (_legs.isNotEmpty) ...[
+              if (!_isFixedPrice && _legs.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 const Divider(height: 1),
                 const SizedBox(height: 6),
@@ -331,8 +331,10 @@ class _BookingScreenState extends State<BookingScreen> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
               helperText: _estimateLow != null
-                  ? 'Must be between Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}'
-                  : 'Get estimate first to validate range',
+                  ? (_isFixedPrice
+                      ? 'Fixed route price is Rs. ${_estimateLow!.toStringAsFixed(0)}'
+                      : 'Estimated range: Rs. ${_estimateLow!.toStringAsFixed(0)} – Rs. ${_estimateHigh!.toStringAsFixed(0)}')
+                  : 'Get estimate first',
               helperStyle: TextStyle(fontSize: 11, color: Colors.orange.shade700),
             ),
           ),

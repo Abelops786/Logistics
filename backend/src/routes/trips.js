@@ -91,6 +91,12 @@ router.get('/pricing-rates', authenticate, async (req, res) => {
   }
 });
 
+// Extract city name from full location string e.g. "North Karachi, Karachi, Pakistan" → "Karachi"
+function extractCity(location) {
+  const parts = location.split(',').map((p) => p.trim());
+  return parts.length >= 2 ? parts[1] : parts[0];
+}
+
 // POST /api/trips/estimate
 router.post('/estimate', authenticate, async (req, res) => {
   const { pickup_location, dropoff_locations, container_type } = req.body;
@@ -99,6 +105,34 @@ router.post('/estimate', authenticate, async (req, res) => {
   }
 
   try {
+    // ── 1. Try fixed route price first ────────────────────────────────────────
+    const fromCity = extractCity(pickup_location);
+    const toCity = extractCity(dropoff_locations[0]);
+
+    const routeRow = await pool.query(
+      `SELECT price FROM route_prices
+       WHERE container_type = $1
+         AND (
+           (LOWER(from_city) = LOWER($2) AND LOWER(to_city) = LOWER($3))
+           OR (LOWER(from_city) = LOWER($3) AND LOWER(to_city) = LOWER($2))
+         )
+       LIMIT 1`,
+      [container_type, fromCity, toCity]
+    );
+
+    if (routeRow.rows.length) {
+      const fixedPrice = parseFloat(routeRow.rows[0].price);
+      return res.json({
+        estimate_low: fixedPrice,
+        estimate_high: fixedPrice,
+        is_fixed: true,
+        source: 'route_table',
+        total_km: null,
+        legs: [],
+      });
+    }
+
+    // ── 2. Fallback: KM-based estimation ─────────────────────────────────────
     const rateRow = await pool.query(
       "SELECT rate_per_km FROM vehicles WHERE plate_number = $1",
       [container_type === '50ft_22_wheeler' ? 'SYSTEM-50FT' : 'SYSTEM-47FT']
@@ -107,12 +141,8 @@ router.post('/estimate', authenticate, async (req, res) => {
     const rate = parseFloat(rateRow.rows[0].rate_per_km);
 
     const stops = [pickup_location, ...dropoff_locations];
-
-    // Try Google Directions first, fall back to matrix
     let result = await calculateDistanceGoogle(stops);
-    if (!result) {
-      result = await calculateDistanceMatrix(stops);
-    }
+    if (!result) result = await calculateDistanceMatrix(stops);
 
     const { totalKm, legs, source } = result;
     const base = Math.round(totalKm * rate);
@@ -124,8 +154,9 @@ router.post('/estimate', authenticate, async (req, res) => {
       rate_per_km: rate,
       estimate_low: low,
       estimate_high: high,
-      legs,           // breakdown per stop
-      source,         // 'google' or 'matrix'
+      is_fixed: false,
+      legs,
+      source,
     });
   } catch (err) {
     console.error(err);
@@ -139,16 +170,6 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
 
   if (!pickup_location || !dropoff_locations?.length || !container_type) {
     return res.status(400).json({ message: 'Missing required fields' });
-  }
-
-  if (agent_requested_price != null && system_estimated_price != null) {
-    const low = Math.round(system_estimated_price * 0.9);
-    const high = Math.round(system_estimated_price * 1.1);
-    if (agent_requested_price < low || agent_requested_price > high) {
-      return res.status(400).json({
-        message: `Counter price must be between Rs. ${low.toLocaleString()} and Rs. ${high.toLocaleString()}.`,
-      });
-    }
   }
 
   try {
