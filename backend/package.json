@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node src/migrations/run.js && node src/app.js",
     "dev": "nodemon src/app.js",
-    "migrate": "node src/migrations/run.js"
+    "migrate": "node src/migrations/run.js",
+    "wipe": "node src/scripts/wipe_test_data.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
