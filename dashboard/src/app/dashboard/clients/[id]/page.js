@@ -31,6 +31,32 @@ function fmtMoney(n) {
   return `Rs. ${v.toLocaleString('en-PK', { maximumFractionDigits: 0 })}`;
 }
 
+function exportLedgerCSV(clientName, transactions) {
+  const headers = ['Date', 'Type', 'Description', 'Trip Route', 'Ref / Mode', 'Amount (Rs)', 'Running Balance (Rs)', 'Logged By'];
+  const lines = transactions.map((tx) => {
+    const isCharge = tx.transaction_type !== 'payment';
+    const amount = isCharge ? parseFloat(tx.amount) : -parseFloat(tx.amount);
+    return [
+      tx.created_at?.slice(0, 10) || '',
+      TX_LABELS[tx.transaction_type] || tx.transaction_type,
+      (tx.internal_notes || '').replace(/"/g, '""'),
+      (tx.pickup_location || '').replace(/"/g, '""'),
+      `${(tx.payment_mode || '').replace('_', ' ')}${tx.reference_number ? ' / ' + tx.reference_number : ''}`,
+      amount,
+      parseFloat(tx.running_balance) || 0,
+      tx.processed_by_name || '',
+    ].map((v) => `"${v}"`).join(',');
+  });
+  const csv = [headers.join(','), ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ledger_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Payment / Adjustment Modal ────────────────────────────────────────────────
 function LedgerModal({ clientId, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -259,8 +285,14 @@ export default function ClientProfilePage() {
 
           {/* Transaction Table */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-semibold text-gray-800">Ledger Feed <span className="text-sm font-normal text-gray-400">({transactions?.length || 0} entries)</span></h2>
+              {transactions?.length > 0 && (
+                <button onClick={() => exportLedgerCSV(client.name, transactions)}
+                  className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs rounded font-medium hover:bg-gray-50">
+                  Export CSV
+                </button>
+              )}
             </div>
             {!transactions?.length ? (
               <div className="py-12 text-center text-gray-400">No transactions in selected period</div>
