@@ -223,7 +223,6 @@ function TripDetailModal({ trip, onClose, onPenaltyApplied, vehicles }) {
   );
 }
 
-// ── Main Agent Profile Page ──────────────────────────────────────────────
 const PERIODS = [
   { key: 'today', label: 'Today' },
   { key: 'yesterday', label: 'Yesterday' },
@@ -232,6 +231,80 @@ const PERIODS = [
   { key: 'custom', label: 'Custom' },
 ];
 
+// ── Ledger Adjustment Modal ───────────────────────────────────────────────────
+function LedgerAdjModal({ agentId, onClose, onSaved }) {
+  const [form, setForm] = useState({ transaction_type: 'debit', amount: '', payment_method: 'cash', reference_note: '' });
+  const [saving, setSaving] = useState(false);
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post(`/api/admin/agents/${agentId}/ledger-adjustment`, form);
+      onSaved();
+      onClose();
+    } catch (err) { alert(err.response?.data?.message || 'Failed'); }
+    finally { setSaving(false); }
+  }
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800">Record Ledger Entry</h3>
+          <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
+        </div>
+        <form onSubmit={save} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">Action</label>
+            <div className="flex gap-3">
+              {[{ v: 'debit', label: 'Payment Received', color: 'green' }, { v: 'credit', label: 'Manual Charge', color: 'red' }].map(({ v, label, color }) => (
+                <button key={v} type="button"
+                  onClick={() => setForm({ ...form, transaction_type: v })}
+                  className={`flex-1 py-2 rounded border text-sm font-medium transition-colors ${form.transaction_type === v
+                    ? (color === 'green' ? 'bg-green-600 text-white border-green-600' : 'bg-red-600 text-white border-red-600')
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {form.transaction_type === 'debit' ? 'Reduces outstanding balance (agent paid)' : 'Increases outstanding balance (charge applied)'}
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Amount (PKR) <span className="text-red-500">*</span></label>
+            <input type="number" required min="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm" placeholder="0" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Payment Method</label>
+            <select value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+              <option value="cash">Cash</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="adjustment">Adjustment</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Notes / Reference <span className="text-red-500">*</span></label>
+            <textarea required rows={2} value={form.reference_note} onChange={(e) => setForm({ ...form, reference_note: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm resize-none"
+              placeholder='e.g. "Received via HBL transfer ref #123456"' />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'Saving...' : 'Record Entry'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Agent Profile Page ──────────────────────────────────────────────
 export default function AgentProfilePage() {
   const { id } = useParams();
   const router = useRouter();
@@ -243,6 +316,12 @@ export default function AgentProfilePage() {
   const [customTo, setCustomTo] = useState('');
   const [viewTrip, setViewTrip] = useState(null);
   const [cnicModal, setCnicModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('trips');
+  const [ledger, setLedger] = useState(null);
+  const [ledgerFrom, setLedgerFrom] = useState('');
+  const [ledgerTo, setLedgerTo] = useState('');
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [adjModal, setAdjModal] = useState(false);
 
   async function load(p, from, to) {
     setLoading(true);
@@ -253,6 +332,17 @@ export default function AgentProfilePage() {
       setData(res.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  }
+
+  async function loadLedger(from, to) {
+    setLedgerLoading(true);
+    try {
+      let url = `/api/admin/agents/${id}/ledger`;
+      if (from && to) url += `?from=${from}&to=${to}`;
+      const res = await api.get(url);
+      setLedger(res.data);
+    } catch (err) { console.error(err); }
+    finally { setLedgerLoading(false); }
   }
 
   useEffect(() => {
@@ -273,6 +363,11 @@ export default function AgentProfilePage() {
   if (!data) return <Layout><div className="text-red-500 py-20 text-center">Agent not found</div></Layout>;
 
   const { agent, stats, period_revenue, period_trips, trips } = data;
+
+  const fmtBalance = (n) => {
+    const v = parseFloat(n) || 0;
+    return `Rs. ${v.toLocaleString('en-PK', { maximumFractionDigits: 0 })}`;
+  };
 
   return (
     <Layout>
@@ -340,6 +435,118 @@ export default function AgentProfilePage() {
           ))}
         </div>
       </div>
+
+      {/* Tab Switcher */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg mb-6 w-fit">
+        {[{ key: 'trips', label: 'Trip History' }, { key: 'ledger', label: 'Financial Ledger' }].map(({ key, label }) => (
+          <button key={key}
+            onClick={() => { setActiveTab(key); if (key === 'ledger' && !ledger) loadLedger(); }}
+            className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${activeTab === key ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Ledger Tab ─────────────────────────────────────────────────────── */}
+      {activeTab === 'ledger' && (
+        <div>
+          {/* Summary Cards + Date Filter */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
+              <h2 className="font-semibold text-gray-800">Ledger Summary</h2>
+              <div className="flex gap-2 items-center flex-wrap">
+                <input type="date" value={ledgerFrom} onChange={(e) => setLedgerFrom(e.target.value)}
+                  className="border border-gray-300 rounded px-3 py-1.5 text-sm" />
+                <span className="text-gray-400 text-sm">to</span>
+                <input type="date" value={ledgerTo} onChange={(e) => setLedgerTo(e.target.value)}
+                  className="border border-gray-300 rounded px-3 py-1.5 text-sm" />
+                <button onClick={() => loadLedger(ledgerFrom, ledgerTo)} disabled={!ledgerFrom || !ledgerTo}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  Apply
+                </button>
+                <button onClick={() => { setLedgerFrom(''); setLedgerTo(''); loadLedger(); }}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded text-sm hover:bg-gray-200">
+                  This Month
+                </button>
+                <button onClick={() => setAdjModal(true)}
+                  className="px-4 py-1.5 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700">
+                  + Record Entry
+                </button>
+              </div>
+            </div>
+            {ledgerLoading ? (
+              <div className="text-center py-6 text-gray-400">Loading ledger...</div>
+            ) : ledger ? (
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: 'Total Revenue Generated', value: ledger.summary.total_revenue, color: 'text-blue-600', bg: 'bg-blue-50' },
+                  { label: 'Total Amount Collected', value: ledger.summary.total_collected, color: 'text-green-600', bg: 'bg-green-50' },
+                  { label: 'Outstanding Balance', value: ledger.summary.outstanding_balance, color: ledger.summary.outstanding_balance > 0 ? 'text-red-600' : 'text-green-600', bg: ledger.summary.outstanding_balance > 0 ? 'bg-red-50' : 'bg-green-50' },
+                ].map((c) => (
+                  <div key={c.label} className={`rounded-lg p-4 ${c.bg}`}>
+                    <p className="text-xs text-gray-500 mb-1">{c.label}</p>
+                    <p className={`text-2xl font-bold ${c.color}`}>{fmtBalance(c.value)}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Transaction Table */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-800">Transaction History</h2>
+            </div>
+            {!ledger || ledger.transactions.length === 0 ? (
+              <div className="py-12 text-center text-gray-400">No transactions in selected period</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Date</th>
+                      <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Type</th>
+                      <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Reference / Trip</th>
+                      <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Method</th>
+                      <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium">Amount</th>
+                      <th className="px-4 py-3 text-right text-xs text-gray-500 font-medium">Running Balance</th>
+                      <th className="px-4 py-3 text-left text-xs text-gray-500 font-medium">Logged By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledger.transactions.map((tx) => (
+                      <tr key={tx.id} className="border-t border-gray-50 hover:bg-gray-50">
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{tx.created_at?.slice(0, 10)}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tx.transaction_type === 'credit' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                            {tx.transaction_type === 'credit' ? '↑ Revenue' : '↓ Payment'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600 max-w-xs">
+                          <p>{tx.reference_note || '—'}</p>
+                          {tx.pickup_location && <p className="text-gray-400 truncate">{tx.pickup_location}</p>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500 capitalize">{tx.payment_method?.replace('_', ' ')}</td>
+                        <td className={`px-4 py-3 text-right text-xs font-semibold ${tx.transaction_type === 'credit' ? 'text-orange-600' : 'text-green-600'}`}>
+                          {tx.transaction_type === 'credit' ? '+' : '-'}{fmtBalance(tx.amount)}
+                        </td>
+                        <td className={`px-4 py-3 text-right text-xs font-bold ${tx.running_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {fmtBalance(tx.running_balance)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-400">{tx.logged_by_name || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Trips Tab ──────────────────────────────────────────────────────── */}
+      {activeTab === 'trips' && (
+        <>
 
       {/* Revenue period selector */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
@@ -453,6 +660,9 @@ export default function AgentProfilePage() {
         )}
       </div>
 
+        </>
+      )}
+
       {/* CNIC Modal */}
       {cnicModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -475,6 +685,13 @@ export default function AgentProfilePage() {
           vehicles={vehicles}
           onClose={() => setViewTrip(null)}
           onPenaltyApplied={() => { load(period, customFrom, customTo); setViewTrip(null); }}
+        />
+      )}
+      {adjModal && (
+        <LedgerAdjModal
+          agentId={id}
+          onClose={() => setAdjModal(false)}
+          onSaved={() => loadLedger(ledgerFrom || undefined, ledgerTo || undefined)}
         />
       )}
     </Layout>

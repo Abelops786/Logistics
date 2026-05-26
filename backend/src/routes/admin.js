@@ -549,6 +549,28 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
       }
     }
 
+    // Auto-create ledger entries when trip is directly approved (no counter offer)
+    if (newStatus === 'approved') {
+      const noEntry = await pool.query('SELECT 1 FROM ledger_transactions WHERE trip_id=$1', [trip.id]);
+      if (!noEntry.rows.length && trip.agent_id) {
+        await pool.query(
+          `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
+           VALUES ($1,$2,'credit',$3,$4,'Trip approved',$5)`,
+          [trip.agent_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
+        );
+      }
+      if (trip.client_id) {
+        const noClientEntry = await pool.query('SELECT 1 FROM client_ledger_transactions WHERE trip_id=$1', [trip.id]);
+        if (!noClientEntry.rows.length) {
+          await pool.query(
+            `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
+             VALUES ($1,$2,'invoice',$3,$4,'Trip invoiced',$5)`,
+            [trip.client_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
+          );
+        }
+      }
+    }
+
     res.json({ message: newStatus === 'quoted' ? 'Price quoted, awaiting agent confirmation' : 'Trip approved', trip });
   } catch (err) {
     console.error(err);
@@ -655,6 +677,22 @@ router.post('/trips/:id/penalty', ...isAdmin, async (req, res) => {
       await sendPenaltyNotification(agentRow.rows[0].phone, agentRow.rows[0].name, route, penalty_amount, trip.total_amount);
     }
 
+    // Ledger entries for penalty
+    if (trip.agent_id) {
+      await pool.query(
+        `INSERT INTO ledger_transactions (agent_id, trip_id, transaction_type, amount, payment_method, reference_note, logged_by)
+         VALUES ($1,$2,'credit',$3,'adjustment','Detention penalty',$4)`,
+        [trip.agent_id, trip.id, parseFloat(penalty_amount), req.user.id]
+      );
+    }
+    if (trip.client_id) {
+      await pool.query(
+        `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
+         VALUES ($1,$2,'invoice',$3,'adjustment','Detention penalty',$4)`,
+        [trip.client_id, trip.id, parseFloat(penalty_amount), req.user.id]
+      );
+    }
+
     res.json({ message: 'Penalty applied and agent notified', trip });
   } catch (err) {
     console.error(err);
@@ -666,30 +704,47 @@ router.post('/trips/:id/penalty', ...isAdmin, async (req, res) => {
 
 router.get('/clients', ...isAdmin, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM clients ORDER BY name ASC');
+    const { rows } = await pool.query(`
+      SELECT c.*,
+        COALESCE(SUM(clt.amount) FILTER (WHERE clt.transaction_type IN ('invoice','adjustment')),0)
+          - COALESCE(SUM(clt.amount) FILTER (WHERE clt.transaction_type = 'payment'),0) AS outstanding_balance,
+        COUNT(DISTINCT t.id) FILTER (WHERE t.status IN ('approved','pending','quoted')) AS active_trips
+      FROM clients c
+      LEFT JOIN client_ledger_transactions clt ON clt.client_id = c.id
+      LEFT JOIN trips t ON t.client_id = c.id
+      GROUP BY c.id
+      ORDER BY c.name ASC
+    `);
     res.json(rows);
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 });
 
 router.post('/clients', ...isAdmin, async (req, res) => {
-  const { name, phone, company_name, address, notes } = req.body;
+  const { name, phone, company_name, address, notes, poc_name, poc_email, ntn_number, status } = req.body;
   if (!name) return res.status(400).json({ message: 'name is required' });
   try {
     const { rows } = await pool.query(
-      'INSERT INTO clients (name, phone, company_name, address, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [name, phone || null, company_name || null, address || null, notes || null]
+      `INSERT INTO clients (name, phone, company_name, address, notes, poc_name, poc_email, ntn_number, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [name, phone || null, company_name || null, address || null, notes || null,
+       poc_name || null, poc_email || null, ntn_number || null, status || 'active']
     );
     res.status(201).json(rows[0]);
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 });
 
 router.put('/clients/:id', ...isAdmin, async (req, res) => {
-  const { name, phone, company_name, address, notes } = req.body;
+  const { name, phone, company_name, address, notes, poc_name, poc_email, ntn_number, status } = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE clients SET name=COALESCE($1,name), phone=COALESCE($2,phone), company_name=COALESCE($3,company_name),
-       address=COALESCE($4,address), notes=COALESCE($5,notes), updated_at=NOW() WHERE id=$6 RETURNING *`,
-      [name || null, phone || null, company_name || null, address || null, notes || null, req.params.id]
+      `UPDATE clients SET
+         name=COALESCE($1,name), phone=COALESCE($2,phone), company_name=COALESCE($3,company_name),
+         address=COALESCE($4,address), notes=COALESCE($5,notes), poc_name=COALESCE($6,poc_name),
+         poc_email=COALESCE($7,poc_email), ntn_number=COALESCE($8,ntn_number),
+         status=COALESCE($9,status), updated_at=NOW()
+       WHERE id=$10 RETURNING *`,
+      [name||null, phone||null, company_name||null, address||null, notes||null,
+       poc_name||null, poc_email||null, ntn_number||null, status||null, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Client not found' });
     res.json(rows[0]);
@@ -698,6 +753,15 @@ router.put('/clients/:id', ...isAdmin, async (req, res) => {
 
 router.delete('/clients/:id', ...isAdmin, async (req, res) => {
   try {
+    const balRow = await pool.query(
+      `SELECT COALESCE(SUM(amount) FILTER (WHERE transaction_type IN ('invoice','adjustment')),0)
+              - COALESCE(SUM(amount) FILTER (WHERE transaction_type='payment'),0) AS balance
+       FROM client_ledger_transactions WHERE client_id=$1`, [req.params.id]
+    );
+    const balance = parseFloat(balRow.rows[0].balance);
+    if (balance > 0) {
+      return res.status(400).json({ message: `Cannot delete — client has outstanding balance of Rs. ${balance.toLocaleString()}. Clear dues first.` });
+    }
     await pool.query('UPDATE trips SET client_id=NULL WHERE client_id=$1', [req.params.id]);
     const { rows } = await pool.query('DELETE FROM clients WHERE id=$1 RETURNING name', [req.params.id]);
     if (!rows.length) return res.status(404).json({ message: 'Client not found' });
@@ -790,7 +854,188 @@ router.post('/trips/create', ...isAdmin, async (req, res) => {
         payment_type,
       ]
     );
-    res.status(201).json({ message: 'Trip created', trip: rows[0] });
+    const trip = rows[0];
+    // Auto-invoice client ledger for admin-created trips
+    if (trip.client_id) {
+      await pool.query(
+        `INSERT INTO client_ledger_transactions (client_id, trip_id, transaction_type, amount, payment_mode, internal_notes, processed_by)
+         VALUES ($1,$2,'invoice',$3,$4,'Admin-created trip',$5)`,
+        [trip.client_id, trip.id, parseFloat(final_price), payment_type === 'cash' ? 'cash' : 'bank_transfer', req.user.id]
+      );
+    }
+    res.status(201).json({ message: 'Trip created', trip });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ── Agent Ledger ──────────────────────────────────────────────────────────────
+
+function ledgerDateRange(query) {
+  const { from, to } = query;
+  const now = new Date();
+  if (from && to) {
+    return [new Date(from).toISOString(), new Date(new Date(to).getTime() + 86400000).toISOString()];
+  }
+  return [new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+          new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()];
+}
+
+// GET /api/admin/agents/:id/ledger
+router.get('/agents/:id/ledger', ...isAdmin, async (req, res) => {
+  const [rangeStart, rangeEnd] = ledgerDateRange(req.query);
+  const agentId = req.params.id;
+  try {
+    const [summaryRow, txRows] = await Promise.all([
+      pool.query(
+        `SELECT
+           COALESCE(SUM(amount) FILTER (WHERE transaction_type='credit'),0) AS total_revenue,
+           COALESCE(SUM(amount) FILTER (WHERE transaction_type='debit'),0) AS total_collected
+         FROM ledger_transactions
+         WHERE agent_id=$1 AND created_at>=$2 AND created_at<$3`,
+        [agentId, rangeStart, rangeEnd]
+      ),
+      pool.query(
+        `SELECT lt.id, lt.transaction_type, lt.amount, lt.payment_method, lt.reference_note,
+                lt.created_at, lt.trip_id, u.name AS logged_by_name,
+                t.pickup_location, t.dropoff_locations
+         FROM ledger_transactions lt
+         LEFT JOIN users u ON u.id=lt.logged_by
+         LEFT JOIN trips t ON t.id=lt.trip_id
+         WHERE lt.agent_id=$1 AND lt.created_at>=$2 AND lt.created_at<$3
+         ORDER BY lt.created_at ASC`,
+        [agentId, rangeStart, rangeEnd]
+      ),
+    ]);
+
+    const s = summaryRow.rows[0];
+    let running = 0;
+    const transactions = txRows.rows.map((tx) => {
+      running += tx.transaction_type === 'credit' ? parseFloat(tx.amount) : -parseFloat(tx.amount);
+      return { ...tx, running_balance: running };
+    }).reverse();
+
+    res.json({
+      summary: {
+        total_revenue: parseFloat(s.total_revenue),
+        total_collected: parseFloat(s.total_collected),
+        outstanding_balance: parseFloat(s.total_revenue) - parseFloat(s.total_collected),
+      },
+      transactions,
+      range: { from: rangeStart, to: rangeEnd },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/admin/agents/:id/ledger-adjustment
+router.post('/agents/:id/ledger-adjustment', ...isAdmin, async (req, res) => {
+  const { transaction_type, amount, payment_method, reference_note } = req.body;
+  if (!['credit', 'debit'].includes(transaction_type))
+    return res.status(400).json({ message: 'transaction_type must be credit or debit' });
+  if (!amount || isNaN(amount) || parseFloat(amount) <= 0)
+    return res.status(400).json({ message: 'Valid positive amount required' });
+  if (!reference_note?.trim())
+    return res.status(400).json({ message: 'reference_note is required for manual adjustments' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO ledger_transactions (agent_id, transaction_type, amount, payment_method, reference_note, logged_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.params.id, transaction_type, parseFloat(amount), payment_method || 'cash', reference_note.trim(), req.user.id]
+    );
+    res.status(201).json({ message: 'Adjustment recorded', transaction: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ── Client Ledger ─────────────────────────────────────────────────────────────
+
+// GET /api/admin/clients/:id/profile
+router.get('/clients/:id/profile', ...isAdmin, async (req, res) => {
+  const [rangeStart, rangeEnd] = ledgerDateRange(req.query);
+  const clientId = req.params.id;
+  try {
+    const [clientRow, summaryRow, txRows, tripsRow] = await Promise.all([
+      pool.query('SELECT * FROM clients WHERE id=$1', [clientId]),
+      pool.query(
+        `SELECT
+           COALESCE(SUM(amount) FILTER (WHERE transaction_type IN ('invoice','adjustment')),0) AS total_invoiced,
+           COALESCE(SUM(amount) FILTER (WHERE transaction_type='payment'),0) AS total_received
+         FROM client_ledger_transactions
+         WHERE client_id=$1 AND created_at>=$2 AND created_at<$3`,
+        [clientId, rangeStart, rangeEnd]
+      ),
+      pool.query(
+        `SELECT clt.id, clt.transaction_type, clt.amount, clt.payment_mode, clt.reference_number,
+                clt.internal_notes, clt.created_at, clt.trip_id, u.name AS processed_by_name,
+                t.pickup_location, t.dropoff_locations
+         FROM client_ledger_transactions clt
+         LEFT JOIN users u ON u.id=clt.processed_by
+         LEFT JOIN trips t ON t.id=clt.trip_id
+         WHERE clt.client_id=$1 AND clt.created_at>=$2 AND clt.created_at<$3
+         ORDER BY clt.created_at ASC`,
+        [clientId, rangeStart, rangeEnd]
+      ),
+      pool.query(
+        `SELECT t.*, v.plate_number, d.name AS driver_name, u.name AS agent_name
+         FROM trips t
+         LEFT JOIN vehicles v ON v.id=t.vehicle_id
+         LEFT JOIN drivers d ON d.id=t.driver_id
+         LEFT JOIN users u ON u.id=t.agent_id
+         WHERE t.client_id=$1 ORDER BY t.created_at DESC`,
+        [clientId]
+      ),
+    ]);
+
+    if (!clientRow.rows.length) return res.status(404).json({ message: 'Client not found' });
+
+    const s = summaryRow.rows[0];
+    let running = 0;
+    const transactions = txRows.rows.map((tx) => {
+      const isCharge = tx.transaction_type === 'invoice' || tx.transaction_type === 'adjustment';
+      running += isCharge ? parseFloat(tx.amount) : -parseFloat(tx.amount);
+      return { ...tx, running_balance: running };
+    }).reverse();
+
+    res.json({
+      client: clientRow.rows[0],
+      summary: {
+        total_invoiced: parseFloat(s.total_invoiced),
+        total_received: parseFloat(s.total_received),
+        outstanding_balance: parseFloat(s.total_invoiced) - parseFloat(s.total_received),
+      },
+      transactions,
+      trips: tripsRow.rows,
+      range: { from: rangeStart, to: rangeEnd },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/admin/clients/:id/ledger-adjustment
+router.post('/clients/:id/ledger-adjustment', ...isAdmin, async (req, res) => {
+  const { transaction_type, amount, payment_mode, reference_number, internal_notes } = req.body;
+  if (!['invoice', 'payment', 'adjustment'].includes(transaction_type))
+    return res.status(400).json({ message: 'transaction_type must be invoice, payment, or adjustment' });
+  if (!amount || isNaN(amount) || parseFloat(amount) <= 0)
+    return res.status(400).json({ message: 'Valid positive amount required' });
+  if (!internal_notes?.trim())
+    return res.status(400).json({ message: 'internal_notes are required' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO client_ledger_transactions (client_id, transaction_type, amount, payment_mode, reference_number, internal_notes, processed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.params.id, transaction_type, parseFloat(amount), payment_mode || 'cash',
+       reference_number || null, internal_notes.trim(), req.user.id]
+    );
+    res.status(201).json({ message: 'Transaction recorded', transaction: rows[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
