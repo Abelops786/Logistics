@@ -101,6 +101,29 @@ function ClientModal({ client, onClose, onSaved }) {
   );
 }
 
+function exportCSV(rows) {
+  const headers = ['Name', 'Company', 'Phone', 'Email', 'NTN', 'Address', 'Status', 'Active Trips', 'Outstanding Balance (Rs)'];
+  const lines = rows.map((c) => [
+    c.name || '',
+    c.company_name || '',
+    c.phone || '',
+    c.poc_email || '',
+    c.ntn_number || '',
+    (c.address || '').replace(/,/g, ' '),
+    c.status || 'active',
+    c.active_trips || 0,
+    parseFloat(c.outstanding_balance) || 0,
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
+  const csv = [headers.join(','), ...lines].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `clients_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ClientsPage() {
   const router = useRouter();
   const [clients, setClients] = useState([]);
@@ -138,10 +161,16 @@ export default function ClientsPage() {
           <h1 className="text-2xl font-bold text-gray-800">Clients</h1>
           <p className="text-sm text-gray-400">{clients.length} registered clients</p>
         </div>
-        <button onClick={() => setModal('add')}
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
-          + Add Client
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => exportCSV(filtered)} disabled={filtered.length === 0}
+            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded font-medium hover:bg-gray-50 disabled:opacity-40">
+            Export CSV
+          </button>
+          <button onClick={() => setModal('add')}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
+            + Add Client
+          </button>
+        </div>
       </div>
 
       <div className="mb-4">
