@@ -57,6 +57,88 @@ function exportLedgerCSV(clientName, transactions) {
   URL.revokeObjectURL(url);
 }
 
+// ── Reverse Modal ─────────────────────────────────────────────────────────────
+function ReverseModal({ clientId, tx, onClose, onSaved }) {
+  const originalAmt = parseFloat(tx.amount) || 0;
+  const reverseType = tx.transaction_type === 'payment' ? 'invoice' : 'payment';
+  const [amount, setAmount] = useState(String(originalAmt));
+  const [note, setNote] = useState(`Reversal of:||${tx.id}| ${tx.internal_notes || TX_LABELS[tx.transaction_type]}`);
+  const [saving, setSaving] = useState(false);
+
+  async function save(e) {
+    e.preventDefault();
+    const val = parseFloat(amount);
+    if (!val || val <= 0) return alert('Enter a valid amount');
+    if (val > originalAmt) return alert(`Cannot reverse more than the original amount (${fmtMoney(originalAmt)})`);
+    setSaving(true);
+    try {
+      await api.post(`/api/admin/clients/${clientId}/ledger-adjustment`, {
+        transaction_type: reverseType,
+        amount: val,
+        payment_mode: tx.payment_mode || 'bank_transfer',
+        reference_number: '',
+        internal_notes: note,
+      });
+      onSaved();
+      onClose();
+    } catch (err) { alert(err.response?.data?.message || 'Reversal failed'); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800">Reverse Transaction</h3>
+          <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
+        </div>
+
+        {/* Original transaction info */}
+        <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+          <p className="text-xs text-gray-400 mb-1">Original Entry</p>
+          <div className="flex justify-between">
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TX_COLORS[tx.transaction_type]}`}>
+              {TX_LABELS[tx.transaction_type]}
+            </span>
+            <span className="font-semibold text-gray-700">{fmtMoney(originalAmt)}</span>
+          </div>
+          {tx.internal_notes && <p className="text-xs text-gray-500 mt-1">{tx.internal_notes}</p>}
+        </div>
+
+        <form onSubmit={save} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Reversal Amount (PKR) <span className="text-red-500">*</span>
+              <span className="text-gray-400 font-normal ml-1">— max {fmtMoney(originalAmt)}</span>
+            </label>
+            <input type="number" required min="1" max={originalAmt} value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            <p className="text-xs text-gray-400 mt-1">
+              This will post a <strong>{TX_LABELS[reverseType]}</strong> of the entered amount, reducing the {tx.transaction_type === 'payment' ? 'Total Payments Received' : 'Total Invoiced / Billed'}.
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Note</label>
+            <input value={note.replace(/^Reversal of:\|\|[^|]+\| /, 'Reversal of: ')} readOnly
+              className="w-full border border-gray-200 bg-gray-50 rounded px-3 py-2 text-sm text-gray-400" />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-red-600 text-white py-2 rounded text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+              {saving ? 'Processing...' : 'Confirm Reversal'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Payment / Adjustment Modal ────────────────────────────────────────────────
 function LedgerModal({ clientId, onClose, onSaved }) {
   const [form, setForm] = useState({
@@ -150,26 +232,10 @@ export default function ClientProfilePage() {
   const [ledgerTo, setLedgerTo] = useState('');
   const [adjModal, setAdjModal] = useState(false);
   const [activeTab, setActiveTab] = useState('ledger');
-  const [reversing, setReversing] = useState('');
+  const [reverseModal, setReverseModal] = useState(null); // tx object | null
 
-  async function handleReverse(tx) {
-    const label = TX_LABELS[tx.transaction_type] || tx.transaction_type;
-    if (!confirm(`Reverse this ${label} of ${fmtMoney(tx.amount)}?\n\nA counter-entry will be posted to cancel it out.`)) return;
-    const reverseType = tx.transaction_type === 'payment' ? 'invoice' : 'payment';
-    setReversing(tx.id);
-    try {
-      await api.post(`/api/admin/clients/${id}/ledger-adjustment`, {
-        transaction_type: reverseType,
-        amount: tx.amount,
-        payment_mode: tx.payment_mode || 'bank_transfer',
-        reference_number: '',
-        // embed original ID so we can detect duplicate reversals: "Reversal of:||<id>| <note>"
-        internal_notes: `Reversal of:||${tx.id}| ${tx.internal_notes || label}`,
-      });
-      load(ledgerFrom || undefined, ledgerTo || undefined);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Reversal failed');
-    } finally { setReversing(''); }
+  function handleReverse(tx) {
+    setReverseModal(tx);
   }
 
   async function load(from, to) {
@@ -352,9 +418,8 @@ export default function ClientProfilePage() {
                               {canReverse && (
                                 <button
                                   onClick={() => handleReverse(tx)}
-                                  disabled={reversing === tx.id}
-                                  className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50 disabled:opacity-40 whitespace-nowrap">
-                                  {reversing === tx.id ? '...' : 'Reverse'}
+                                  className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50 whitespace-nowrap">
+                                  Reverse
                                 </button>
                               )}
                               {alreadyReversed && (
@@ -429,6 +494,15 @@ export default function ClientProfilePage() {
 
       {adjModal && (
         <LedgerModal clientId={id} onClose={() => setAdjModal(false)} onSaved={() => load(ledgerFrom || undefined, ledgerTo || undefined)} />
+      )}
+
+      {reverseModal && (
+        <ReverseModal
+          clientId={id}
+          tx={reverseModal}
+          onClose={() => setReverseModal(null)}
+          onSaved={() => { setReverseModal(null); load(ledgerFrom || undefined, ledgerTo || undefined); }}
+        />
       )}
     </Layout>
   );
