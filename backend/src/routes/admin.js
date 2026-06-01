@@ -540,40 +540,36 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/admin/trips/:id — edit trip fields
+// PUT /api/admin/trips/:id — edit trip fields (dynamic — only updates sent fields)
 router.put('/trips/:id', ...isAdmin, async (req, res) => {
-  const { payment_type, admin_final_price, container_type, vehicle_id, driver_id,
-          client_name, client_phone, client_id_2, client_name_2, client_phone_2,
-          weight_ton, cargo_items, is_double } = req.body;
+  const allowed = ['payment_type', 'admin_final_price', 'container_type', 'vehicle_id', 'driver_id',
+                   'client_name', 'client_phone', 'client_id_2', 'client_name_2', 'client_phone_2',
+                   'weight_ton', 'cargo_items', 'is_double'];
   try {
+    const setClauses = [];
+    const params = [];
+    let idx = 1;
+
+    for (const key of allowed) {
+      if (key in req.body) {
+        setClauses.push(`${key} = $${idx++}`);
+        let val = req.body[key];
+        if (key === 'admin_final_price') val = val ? parseFloat(val) : null;
+        else if (key === 'weight_ton') val = val ? parseFloat(val) : null;
+        else if (key === 'is_double') val = Boolean(val);
+        else val = val === '' ? null : (val || null);
+        params.push(val);
+      }
+    }
+
+    if (!setClauses.length) return res.status(400).json({ message: 'Nothing to update' });
+
+    setClauses.push(`updated_at = NOW()`);
+    params.push(req.params.id);
+
     const { rows } = await pool.query(
-      `UPDATE trips SET
-         payment_type    = COALESCE($1, payment_type),
-         admin_final_price = COALESCE($2, admin_final_price),
-         container_type  = COALESCE($3, container_type),
-         vehicle_id      = COALESCE($4, vehicle_id),
-         driver_id       = COALESCE($5, driver_id),
-         client_name     = COALESCE($6, client_name),
-         client_phone    = COALESCE($7, client_phone),
-         client_id_2     = COALESCE($8, client_id_2),
-         client_name_2   = COALESCE($9, client_name_2),
-         client_phone_2  = COALESCE($10, client_phone_2),
-         weight_ton      = COALESCE($11, weight_ton),
-         cargo_items     = COALESCE($12, cargo_items),
-         is_double       = COALESCE($13, is_double),
-         updated_at      = NOW()
-       WHERE id = $14 RETURNING *`,
-      [payment_type || null, admin_final_price ? parseFloat(admin_final_price) : null,
-       container_type || null, vehicle_id || null, driver_id || null,
-       client_name !== undefined ? (client_name || null) : undefined,
-       client_phone !== undefined ? (client_phone || null) : undefined,
-       client_id_2 !== undefined ? (client_id_2 || null) : undefined,
-       client_name_2 !== undefined ? (client_name_2 || null) : undefined,
-       client_phone_2 !== undefined ? (client_phone_2 || null) : undefined,
-       weight_ton !== undefined ? (weight_ton || null) : undefined,
-       cargo_items !== undefined ? (cargo_items || null) : undefined,
-       is_double !== undefined ? is_double : null,
-       req.params.id]
+      `UPDATE trips SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
+      params
     );
     if (!rows.length) return res.status(404).json({ message: 'Trip not found' });
     res.json({ message: 'Trip updated', trip: rows[0] });
