@@ -16,9 +16,12 @@ class _BookingScreenState extends State<BookingScreen> {
   String _containerType = '50ft_22_wheeler';
   bool _isDouble = false;
   bool _counterOffer = false;
+  bool _showClient2 = false;
   final _counterPriceCtrl = TextEditingController();
   final _clientNameCtrl = TextEditingController();
   final _clientPhoneCtrl = TextEditingController();
+  final _client2NameCtrl = TextEditingController();
+  final _client2PhoneCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
   final _cargoCtrl = TextEditingController();
   bool _submitting = false;
@@ -47,6 +50,8 @@ class _BookingScreenState extends State<BookingScreen> {
         'is_double': _isDouble,
         if (_clientNameCtrl.text.isNotEmpty) 'client_name': _clientNameCtrl.text.trim(),
         if (_clientPhoneCtrl.text.isNotEmpty) 'client_phone': _clientPhoneCtrl.text.trim(),
+        if (_showClient2 && _client2NameCtrl.text.isNotEmpty) 'client_name_2': _client2NameCtrl.text.trim(),
+        if (_showClient2 && _client2PhoneCtrl.text.isNotEmpty) 'client_phone_2': _client2PhoneCtrl.text.trim(),
         if (_weightCtrl.text.isNotEmpty) 'weight_ton': double.tryParse(_weightCtrl.text),
         if (_cargoCtrl.text.isNotEmpty) 'cargo_items': _cargoCtrl.text.trim(),
         if (_counterOffer && _counterPriceCtrl.text.isNotEmpty)
@@ -74,12 +79,15 @@ class _BookingScreenState extends State<BookingScreen> {
     _counterPriceCtrl.clear();
     _clientNameCtrl.clear();
     _clientPhoneCtrl.clear();
+    _client2NameCtrl.clear();
+    _client2PhoneCtrl.clear();
     _weightCtrl.clear();
     _cargoCtrl.clear();
     setState(() {
       _pickupLocation = '';
       _counterOffer = false;
       _isDouble = false;
+      _showClient2 = false;
       _formKey++;
     });
   }
@@ -219,32 +227,66 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Widget _buildClientSection() {
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300));
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Client 1
+        const Text('Client 1', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
+        const SizedBox(height: 8),
         TextField(
           controller: _clientNameCtrl,
-          decoration: InputDecoration(
-            labelText: 'Client Name',
-            hintText: 'e.g. Ali Hassan',
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-          ),
+          decoration: InputDecoration(labelText: 'Client Name', hintText: 'e.g. Ali Hassan', filled: true, fillColor: Colors.grey.shade50, border: border, enabledBorder: border),
         ),
         const SizedBox(height: 10),
         TextField(
           controller: _clientPhoneCtrl,
           keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            labelText: 'Client Contact No',
-            hintText: '03xxxxxxxxx',
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
-          ),
+          decoration: InputDecoration(labelText: 'Client Contact No', hintText: '03xxxxxxxxx', filled: true, fillColor: Colors.grey.shade50, border: border, enabledBorder: border),
         ),
+        const SizedBox(height: 12),
+
+        // Toggle Client 2
+        if (!_showClient2)
+          TextButton.icon(
+            onPressed: () => setState(() => _showClient2 = true),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Second Client'),
+            style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700, padding: EdgeInsets.zero),
+          )
+        else ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Text('Client 2', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.blue.shade700)),
+                  GestureDetector(
+                    onTap: () { setState(() { _showClient2 = false; _client2NameCtrl.clear(); _client2PhoneCtrl.clear(); }); },
+                    child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _client2NameCtrl,
+                  decoration: InputDecoration(labelText: 'Client 2 Name', filled: true, fillColor: Colors.white, border: border, enabledBorder: border),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _client2PhoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(labelText: 'Client 2 Contact No', filled: true, fillColor: Colors.white, border: border, enabledBorder: border),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
