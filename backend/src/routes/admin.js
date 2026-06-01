@@ -543,7 +543,8 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
 // PUT /api/admin/trips/:id — edit trip fields
 router.put('/trips/:id', ...isAdmin, async (req, res) => {
   const { payment_type, admin_final_price, container_type, vehicle_id, driver_id,
-          client_name, client_phone, weight_ton, cargo_items, is_double } = req.body;
+          client_name, client_phone, client_id_2, client_name_2, client_phone_2,
+          weight_ton, cargo_items, is_double } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE trips SET
@@ -554,15 +555,21 @@ router.put('/trips/:id', ...isAdmin, async (req, res) => {
          driver_id       = COALESCE($5, driver_id),
          client_name     = COALESCE($6, client_name),
          client_phone    = COALESCE($7, client_phone),
-         weight_ton      = COALESCE($8, weight_ton),
-         cargo_items     = COALESCE($9, cargo_items),
-         is_double       = COALESCE($10, is_double),
+         client_id_2     = COALESCE($8, client_id_2),
+         client_name_2   = COALESCE($9, client_name_2),
+         client_phone_2  = COALESCE($10, client_phone_2),
+         weight_ton      = COALESCE($11, weight_ton),
+         cargo_items     = COALESCE($12, cargo_items),
+         is_double       = COALESCE($13, is_double),
          updated_at      = NOW()
-       WHERE id = $11 RETURNING *`,
+       WHERE id = $14 RETURNING *`,
       [payment_type || null, admin_final_price ? parseFloat(admin_final_price) : null,
        container_type || null, vehicle_id || null, driver_id || null,
        client_name !== undefined ? (client_name || null) : undefined,
        client_phone !== undefined ? (client_phone || null) : undefined,
+       client_id_2 !== undefined ? (client_id_2 || null) : undefined,
+       client_name_2 !== undefined ? (client_name_2 || null) : undefined,
+       client_phone_2 !== undefined ? (client_phone_2 || null) : undefined,
        weight_ton !== undefined ? (weight_ton || null) : undefined,
        cargo_items !== undefined ? (cargo_items || null) : undefined,
        is_double !== undefined ? is_double : null,
@@ -827,7 +834,9 @@ router.delete('/route-prices/:id', ...isAdmin, async (req, res) => {
 // ── Admin Create Trip ─────────────────────────────────────────────────────────
 
 router.post('/trips/create', ...isAdmin, async (req, res) => {
-  const { client_id, client_name, client_phone, pickup_location, dropoff_locations,
+  const { client_id, client_name, client_phone,
+          client_id_2, client_name_2, client_phone_2,
+          pickup_location, dropoff_locations,
           container_type, final_price, vehicle_id, payment_type,
           weight_ton, cargo_items, is_double } = req.body;
 
@@ -842,14 +851,19 @@ router.post('/trips/create', ...isAdmin, async (req, res) => {
     if (!driver_id) return res.status(400).json({ message: 'Selected vehicle has no driver assigned.' });
 
     const { rows } = await pool.query(
-      `INSERT INTO trips (client_id, client_name, client_phone, pickup_location, dropoff_locations,
+      `INSERT INTO trips (client_id, client_name, client_phone,
+        client_id_2, client_name_2, client_phone_2,
+        pickup_location, dropoff_locations,
         container_type, admin_final_price, vehicle_id, driver_id, payment_type,
         weight_ton, cargo_items, is_double, status, system_estimated_price)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'approved',$7) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'approved',$10) RETURNING *`,
       [
         client_id || null,
         client_name || null,
         client_phone || null,
+        client_id_2 || null,
+        client_name_2 || null,
+        client_phone_2 || null,
         pickup_location,
         JSON.stringify(dropoff_locations),
         container_type,

@@ -30,6 +30,9 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
     client_id: '',
     client_name: '',
     client_phone: '',
+    client_id_2: '',
+    client_name_2: '',
+    client_phone_2: '',
     pickup_location: '',
     dropoff_locations: [''],
     container_type: '50ft_22_wheeler',
@@ -40,6 +43,7 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
     vehicle_id: '',
     payment_type: 'bank',
   });
+  const [showClient2, setShowClient2] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -57,10 +61,21 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
 
   function selectClient(e) {
     const id = e.target.value;
-    setForm({ ...form, client_id: id });
     if (id) {
       const c = clients.find((cl) => cl.id === id);
       if (c) setForm((f) => ({ ...f, client_id: id, client_name: c.name, client_phone: c.phone || '' }));
+    } else {
+      setForm((f) => ({ ...f, client_id: '' }));
+    }
+  }
+
+  function selectClient2(e) {
+    const id = e.target.value;
+    if (id) {
+      const c = clients.find((cl) => cl.id === id);
+      if (c) setForm((f) => ({ ...f, client_id_2: id, client_name_2: c.name, client_phone_2: c.phone || '' }));
+    } else {
+      setForm((f) => ({ ...f, client_id_2: '', client_name_2: '', client_phone_2: '' }));
     }
   }
 
@@ -91,9 +106,9 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
           <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
         </div>
         <form onSubmit={submit} className="space-y-3">
-          {/* Client */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Client (select or enter manually)</label>
+          {/* Client 1 */}
+          <div className="border border-gray-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-gray-500 mb-2">Client 1</p>
             <select value={form.client_id} onChange={selectClient}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2">
               <option value="">— Select existing client —</option>
@@ -106,6 +121,33 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
                 placeholder="Client Phone" className="border border-gray-300 rounded px-3 py-2 text-sm" />
             </div>
           </div>
+
+          {/* Client 2 toggle */}
+          {!showClient2 ? (
+            <button type="button" onClick={() => setShowClient2(true)}
+              className="text-xs text-blue-600 hover:underline font-medium">
+              + Add Second Client
+            </button>
+          ) : (
+            <div className="border border-blue-200 bg-blue-50 rounded-lg p-3">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-xs font-semibold text-blue-700">Client 2</p>
+                <button type="button" onClick={() => { setShowClient2(false); setForm((f) => ({ ...f, client_id_2: '', client_name_2: '', client_phone_2: '' })); }}
+                  className="text-gray-400 hover:text-gray-600 text-sm">✕ Remove</button>
+              </div>
+              <select value={form.client_id_2} onChange={selectClient2}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-2 bg-white">
+                <option value="">— Select existing client —</option>
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` • ${c.phone}` : ''}</option>)}
+              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={form.client_name_2} onChange={(e) => setForm({ ...form, client_name_2: e.target.value })}
+                  placeholder="Client 2 Name" className="border border-gray-300 rounded px-3 py-2 text-sm bg-white" />
+                <input value={form.client_phone_2} onChange={(e) => setForm({ ...form, client_phone_2: e.target.value })}
+                  placeholder="Client 2 Phone" className="border border-gray-300 rounded px-3 py-2 text-sm bg-white" />
+              </div>
+            </div>
+          )}
           {/* Route */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Pickup Location <span className="text-red-500">*</span></label>
@@ -209,11 +251,14 @@ function EditTripModal({ trip, vehicles, onClose, onSaved }) {
     container_type: trip.container_type || '50ft_22_wheeler',
     client_name: trip.client_name || '',
     client_phone: trip.client_phone || '',
+    client_name_2: trip.client_name_2 || '',
+    client_phone_2: trip.client_phone_2 || '',
     weight_ton: trip.weight_ton || '',
     cargo_items: trip.cargo_items || '',
     is_double: trip.is_double || false,
     vehicle_id: trip.vehicle_id || '',
   });
+  const [showClient2, setShowClient2] = useState(!!(trip.client_name_2));
   const [loading, setLoading] = useState(false);
 
   const assignableVehicles = vehicles.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
@@ -289,19 +334,37 @@ function EditTripModal({ trip, vehicles, onClose, onSaved }) {
               ))}
             </select>
           </div>
-          {/* Client */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Client Name</label>
+          {/* Client 1 */}
+          <div className="border border-gray-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-gray-500 mb-2">Client 1</p>
+            <div className="grid grid-cols-2 gap-3">
               <input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })}
-                placeholder="Client name" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Client Phone</label>
+                placeholder="Client Name" className="border border-gray-300 rounded px-3 py-2 text-sm" />
               <input value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })}
-                placeholder="03xxxxxxxxx" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+                placeholder="Client Phone" className="border border-gray-300 rounded px-3 py-2 text-sm" />
             </div>
           </div>
+          {/* Client 2 */}
+          {!showClient2 ? (
+            <button type="button" onClick={() => setShowClient2(true)}
+              className="text-xs text-blue-600 hover:underline font-medium">
+              + Add Second Client
+            </button>
+          ) : (
+            <div className="border border-blue-200 bg-blue-50 rounded-lg p-3">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-xs font-semibold text-blue-700">Client 2</p>
+                <button type="button" onClick={() => { setShowClient2(false); setForm((f) => ({ ...f, client_name_2: '', client_phone_2: '' })); }}
+                  className="text-gray-400 hover:text-gray-600 text-sm">✕ Remove</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <input value={form.client_name_2} onChange={(e) => setForm({ ...form, client_name_2: e.target.value })}
+                  placeholder="Client 2 Name" className="border border-gray-300 bg-white rounded px-3 py-2 text-sm" />
+                <input value={form.client_phone_2} onChange={(e) => setForm({ ...form, client_phone_2: e.target.value })}
+                  placeholder="Client 2 Phone" className="border border-gray-300 bg-white rounded px-3 py-2 text-sm" />
+              </div>
+            </div>
+          )}
           {/* Cargo */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -732,7 +795,7 @@ export default function TripsPage() {
                     <p className="text-xs text-gray-500 mt-1">
                       Agent: {trip.agent_name} • {containerLabel(trip.container_type)}
                       {trip.is_double && <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">Double</span>}
-                      {trip.client_name && <span className="ml-2 text-gray-400">Client: {trip.client_name}</span>}
+                      {trip.client_name && <span className="ml-2 text-gray-400">Client: {trip.client_name}{trip.client_name_2 ? ` & ${trip.client_name_2}` : ''}</span>}
                     </p>
                     {(trip.weight_ton || trip.cargo_items) && (
                       <p className="text-xs text-gray-400 mt-0.5">
