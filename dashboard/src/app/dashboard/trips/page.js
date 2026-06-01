@@ -643,11 +643,21 @@ function TripDetailsModal({ trip, onClose, onDone }) {
         <div className="space-y-0 mb-4">
           <Row label="Date" value={trip.created_at?.slice(0, 10)} />
           <Row label="Agent" value={`${trip.agent_name} (${trip.agent_phone})`} />
-          <Row label="Container" value={containerLabel(trip.container_type)} />
+          <Row label="Container" value={`${containerLabel(trip.container_type)}${trip.is_double ? ' • Double Trip' : ''}`} />
           <Row label="Vehicle" value={trip.plate_number} />
           <Row label="Driver" value={`${trip.driver_name || '—'}${trip.driver_phone ? ` • ${trip.driver_phone}` : ''}`} />
           <Row label="Payment" value={trip.payment_type === 'bank' ? 'Bank Transfer' : trip.payment_type === 'cash' ? 'Cash' : '—'} color={trip.payment_type === 'bank' ? 'text-blue-600' : 'text-green-600'} />
           <Row label="Status" value={trip.status?.toUpperCase()} />
+          {/* Client Info */}
+          {(trip.client_name || trip.client_name_2) && (
+            <>
+              <Row label="Client 1" value={`${trip.client_name || '—'}${trip.client_phone ? ` • ${trip.client_phone}` : ''}`} color="text-blue-700" />
+              {trip.client_name_2 && <Row label="Client 2" value={`${trip.client_name_2}${trip.client_phone_2 ? ` • ${trip.client_phone_2}` : ''}`} color="text-blue-700" />}
+            </>
+          )}
+          {/* Cargo Info */}
+          {trip.weight_ton && <Row label="Weight" value={`${trip.weight_ton} Tons`} />}
+          {trip.cargo_items && <Row label="Items / Cargo" value={trip.cargo_items} />}
           <Row label="System Estimate" value={trip.system_estimated_price ? `Rs. ${parseInt(trip.system_estimated_price).toLocaleString()}` : null} />
           <Row label="Agent Offer" value={trip.agent_requested_price ? `Rs. ${parseInt(trip.agent_requested_price).toLocaleString()}` : null} color="text-orange-600" />
           <Row label="Admin Final Price" value={trip.admin_final_price ? `Rs. ${parseInt(trip.admin_final_price).toLocaleString()}` : null} color="text-green-700" />
