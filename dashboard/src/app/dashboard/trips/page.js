@@ -702,6 +702,7 @@ export default function TripsPage() {
   const [loading, setLoading] = useState(true);
   const [assignTrip, setAssignTrip] = useState(null);
   const [editTrip, setEditTrip] = useState(null);
+  const [deletingId, setDeletingId] = useState('');
   const [completeTrip, setCompleteTrip] = useState(null);
   const [notCompleteTrip, setNotCompleteTrip] = useState(null);
   const [viewTrip, setViewTrip] = useState(null);
@@ -725,6 +726,17 @@ export default function TripsPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function handleDelete(trip) {
+    if (!confirm(`Delete this trip?\n${trip.pickup_location}\n\nThis cannot be undone.`)) return;
+    setDeletingId(trip.id);
+    try {
+      await api.delete(`/api/admin/trips/${trip.id}`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete trip');
+    } finally { setDeletingId(''); }
+  }
 
   const filtered = statusFilter === 'all' ? trips : trips.filter((t) => t.status === statusFilter);
 
@@ -825,6 +837,10 @@ export default function TripsPage() {
                     <button onClick={() => setEditTrip(trip)}
                       className="px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded text-xs font-medium hover:bg-yellow-100">
                       Edit
+                    </button>
+                    <button onClick={() => handleDelete(trip)} disabled={deletingId === trip.id}
+                      className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded text-xs font-medium hover:bg-red-100 disabled:opacity-40">
+                      {deletingId === trip.id ? '...' : 'Delete'}
                     </button>
                     {trip.status === 'pending' && (
                       <button onClick={() => setAssignTrip(trip)}

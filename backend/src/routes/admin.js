@@ -540,6 +540,21 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/admin/trips/:id
+router.delete('/trips/:id', ...isAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM ledger_transactions WHERE trip_id = $1', [req.params.id]);
+    await pool.query('DELETE FROM client_ledger_transactions WHERE trip_id = $1', [req.params.id]);
+    await pool.query('DELETE FROM notifications WHERE related_id = $1', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM trips WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: 'Trip not found' });
+    res.json({ message: 'Trip deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // PUT /api/admin/trips/:id — edit trip fields (dynamic — only updates sent fields)
 router.put('/trips/:id', ...isAdmin, async (req, res) => {
   const allowed = ['payment_type', 'admin_final_price', 'container_type', 'vehicle_id', 'driver_id',
