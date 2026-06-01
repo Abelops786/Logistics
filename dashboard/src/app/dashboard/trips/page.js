@@ -33,6 +33,9 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
     pickup_location: '',
     dropoff_locations: [''],
     container_type: '50ft_22_wheeler',
+    is_double: false,
+    weight_ton: '',
+    cargo_items: '',
     final_price: '',
     vehicle_id: '',
     payment_type: 'bank',
@@ -123,7 +126,7 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
           ))}
           <button type="button" onClick={() => setForm({ ...form, dropoff_locations: [...form.dropoff_locations, ''] })}
             className="text-xs text-blue-600 hover:underline">+ Add Dropoff</button>
-          {/* Container & Price */}
+          {/* Container, Double & Price */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Container Type</label>
@@ -139,6 +142,24 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
             </div>
           </div>
+          {/* Double + Cargo */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Weight (Tons)</label>
+              <input type="number" step="0.1" value={form.weight_ton} onChange={(e) => setForm({ ...form, weight_ton: e.target.value })}
+                placeholder="e.g. 20.5" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Items / Cargo</label>
+              <input value={form.cargo_items} onChange={(e) => setForm({ ...form, cargo_items: e.target.value })}
+                placeholder="e.g. Cotton, Electronics" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.is_double} onChange={(e) => setForm({ ...form, is_double: e.target.checked })}
+              className="w-4 h-4 accent-blue-600" />
+            <span className="text-sm font-medium text-gray-700">Double Trip</span>
+          </label>
           {/* Vehicle */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Vehicle <span className="text-red-500">*</span></label>
@@ -173,6 +194,134 @@ function CreateTripModal({ vehicles, onClose, onCreated }) {
               className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">
               Cancel
             </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Trip Modal ──────────────────────────────────────────────────────────
+function EditTripModal({ trip, vehicles, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    payment_type: trip.payment_type || 'bank',
+    admin_final_price: trip.admin_final_price || '',
+    container_type: trip.container_type || '50ft_22_wheeler',
+    client_name: trip.client_name || '',
+    client_phone: trip.client_phone || '',
+    weight_ton: trip.weight_ton || '',
+    cargo_items: trip.cargo_items || '',
+    is_double: trip.is_double || false,
+    vehicle_id: trip.vehicle_id || '',
+  });
+  const [loading, setLoading] = useState(false);
+
+  const assignableVehicles = vehicles.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
+  const selectedVehicle = assignableVehicles.find((v) => v.id === form.vehicle_id);
+
+  async function submit(e) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = { ...form };
+      if (form.vehicle_id && selectedVehicle?.assigned_driver_id) {
+        payload.driver_id = selectedVehicle.assigned_driver_id;
+      }
+      await api.put(`/api/admin/trips/${trip.id}`, payload);
+      onSaved();
+      onClose();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update trip');
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-auto">
+      <div className="bg-white rounded-lg p-6 max-w-lg w-full my-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800 text-lg">Edit Trip</h3>
+          <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">{trip.pickup_location} → {(Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]')).join(' → ')}</p>
+        <form onSubmit={submit} className="space-y-3">
+          {/* Payment & Price */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Payment Type</label>
+              <select value={form.payment_type} onChange={(e) => setForm({ ...form, payment_type: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <option value="bank">Bank Transfer</option>
+                <option value="cash">Cash</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Final Price (PKR)</label>
+              <input type="number" value={form.admin_final_price} onChange={(e) => setForm({ ...form, admin_final_price: e.target.value })}
+                placeholder="e.g. 55000" min="1"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+          {/* Container & Double */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Container Type</label>
+              <select value={form.container_type} onChange={(e) => setForm({ ...form, container_type: e.target.value })}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                {Object.entries(CONTAINER_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.is_double} onChange={(e) => setForm({ ...form, is_double: e.target.checked })}
+                  className="w-4 h-4 accent-blue-600" />
+                <span className="text-sm font-medium text-gray-700">Double Trip</span>
+              </label>
+            </div>
+          </div>
+          {/* Vehicle */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Vehicle</label>
+            <select value={form.vehicle_id} onChange={(e) => setForm({ ...form, vehicle_id: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+              <option value="">— Keep current vehicle —</option>
+              {assignableVehicles.map((v) => (
+                <option key={v.id} value={v.id}>{v.plate_number} — {containerLabel(v.container_type)}{v.driver_name ? ` (${v.driver_name})` : ' ⚠ No driver'}</option>
+              ))}
+            </select>
+          </div>
+          {/* Client */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Client Name</label>
+              <input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })}
+                placeholder="Client name" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Client Phone</label>
+              <input value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })}
+                placeholder="03xxxxxxxxx" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+          {/* Cargo */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Weight (Tons)</label>
+              <input type="number" step="0.1" value={form.weight_ton} onChange={(e) => setForm({ ...form, weight_ton: e.target.value })}
+                placeholder="e.g. 20.5" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Items / Cargo</label>
+              <input value={form.cargo_items} onChange={(e) => setForm({ ...form, cargo_items: e.target.value })}
+                placeholder="e.g. Electronics, Cotton" className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={loading}
+              className="flex-1 bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">Cancel</button>
           </div>
         </form>
       </div>
@@ -489,6 +638,7 @@ export default function TripsPage() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assignTrip, setAssignTrip] = useState(null);
+  const [editTrip, setEditTrip] = useState(null);
   const [completeTrip, setCompleteTrip] = useState(null);
   const [notCompleteTrip, setNotCompleteTrip] = useState(null);
   const [viewTrip, setViewTrip] = useState(null);
@@ -579,7 +729,16 @@ export default function TripsPage() {
                       <span className="text-xs text-gray-400">{new Date(trip.created_at).toLocaleDateString()}</span>
                     </div>
                     <p className="font-medium text-gray-800 text-sm">{trip.pickup_location} → {drops.join(' → ')}</p>
-                    <p className="text-xs text-gray-500 mt-1">Agent: {trip.agent_name} • {containerLabel(trip.container_type)}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Agent: {trip.agent_name} • {containerLabel(trip.container_type)}
+                      {trip.is_double && <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">Double</span>}
+                      {trip.client_name && <span className="ml-2 text-gray-400">Client: {trip.client_name}</span>}
+                    </p>
+                    {(trip.weight_ton || trip.cargo_items) && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {trip.weight_ton && `${trip.weight_ton}T`}{trip.weight_ton && trip.cargo_items && ' • '}{trip.cargo_items}
+                      </p>
+                    )}
                     <div className="flex gap-4 mt-2 text-xs text-gray-600 flex-wrap">
                       {trip.system_estimated_price && <span>Est: Rs. {parseInt(trip.system_estimated_price).toLocaleString()}</span>}
                       {trip.agent_requested_price && <span className="text-orange-600">Agent offer: Rs. {parseInt(trip.agent_requested_price).toLocaleString()}</span>}
@@ -599,6 +758,10 @@ export default function TripsPage() {
                     <button onClick={() => setViewTrip(trip)}
                       className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded text-xs font-medium hover:bg-gray-200">
                       View Details
+                    </button>
+                    <button onClick={() => setEditTrip(trip)}
+                      className="px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded text-xs font-medium hover:bg-yellow-100">
+                      Edit
                     </button>
                     {trip.status === 'pending' && (
                       <button onClick={() => setAssignTrip(trip)}
@@ -639,6 +802,7 @@ export default function TripsPage() {
       )}
 
       {createTrip && <CreateTripModal vehicles={vehicles} onClose={() => setCreateTrip(false)} onCreated={load} />}
+      {editTrip && <EditTripModal trip={editTrip} vehicles={vehicles} onClose={() => setEditTrip(null)} onSaved={load} />}
       {assignTrip && <AssignModal trip={assignTrip} vehicles={vehicles} onClose={() => setAssignTrip(null)} onAssigned={load} />}
       {completeTrip && <CompleteModal trip={completeTrip} onClose={() => setCompleteTrip(null)} onDone={load} />}
       {notCompleteTrip && <NotCompleteModal trip={notCompleteTrip} onClose={() => setNotCompleteTrip(null)} onDone={load} />}

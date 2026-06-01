@@ -7,7 +7,8 @@ const router = express.Router();
 
 // POST /api/trips/request
 router.post('/request', authenticate, requireRole('agent'), async (req, res) => {
-  const { pickup_location, dropoff_locations, container_type, agent_requested_price } = req.body;
+  const { pickup_location, dropoff_locations, container_type, agent_requested_price,
+          client_name, client_phone, weight_ton, cargo_items, is_double } = req.body;
 
   if (!pickup_location || !dropoff_locations?.length || !container_type) {
     return res.status(400).json({ message: 'Missing required fields' });
@@ -15,9 +16,11 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO trips (agent_id, pickup_location, dropoff_locations, container_type, agent_requested_price, status)
-       VALUES ($1, $2, $3, $4, $5, 'pending') RETURNING *`,
-      [req.user.id, pickup_location, JSON.stringify(dropoff_locations), container_type, agent_requested_price || null]
+      `INSERT INTO trips (agent_id, pickup_location, dropoff_locations, container_type, agent_requested_price,
+                          client_name, client_phone, weight_ton, cargo_items, is_double, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending') RETURNING *`,
+      [req.user.id, pickup_location, JSON.stringify(dropoff_locations), container_type, agent_requested_price || null,
+       client_name || null, client_phone || null, weight_ton || null, cargo_items || null, is_double || false]
     );
 
     const trip = rows[0];

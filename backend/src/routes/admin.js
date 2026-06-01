@@ -540,6 +540,42 @@ router.post('/trips/:id/assign', ...isAdmin, async (req, res) => {
   }
 });
 
+// PUT /api/admin/trips/:id — edit trip fields
+router.put('/trips/:id', ...isAdmin, async (req, res) => {
+  const { payment_type, admin_final_price, container_type, vehicle_id, driver_id,
+          client_name, client_phone, weight_ton, cargo_items, is_double } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE trips SET
+         payment_type    = COALESCE($1, payment_type),
+         admin_final_price = COALESCE($2, admin_final_price),
+         container_type  = COALESCE($3, container_type),
+         vehicle_id      = COALESCE($4, vehicle_id),
+         driver_id       = COALESCE($5, driver_id),
+         client_name     = COALESCE($6, client_name),
+         client_phone    = COALESCE($7, client_phone),
+         weight_ton      = COALESCE($8, weight_ton),
+         cargo_items     = COALESCE($9, cargo_items),
+         is_double       = COALESCE($10, is_double),
+         updated_at      = NOW()
+       WHERE id = $11 RETURNING *`,
+      [payment_type || null, admin_final_price ? parseFloat(admin_final_price) : null,
+       container_type || null, vehicle_id || null, driver_id || null,
+       client_name !== undefined ? (client_name || null) : undefined,
+       client_phone !== undefined ? (client_phone || null) : undefined,
+       weight_ton !== undefined ? (weight_ton || null) : undefined,
+       cargo_items !== undefined ? (cargo_items || null) : undefined,
+       is_double !== undefined ? is_double : null,
+       req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Trip not found' });
+    res.json({ message: 'Trip updated', trip: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // POST /api/admin/trips/:id/complete
 router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
   const { notes } = req.body;
@@ -792,7 +828,8 @@ router.delete('/route-prices/:id', ...isAdmin, async (req, res) => {
 
 router.post('/trips/create', ...isAdmin, async (req, res) => {
   const { client_id, client_name, client_phone, pickup_location, dropoff_locations,
-          container_type, final_price, vehicle_id, payment_type } = req.body;
+          container_type, final_price, vehicle_id, payment_type,
+          weight_ton, cargo_items, is_double } = req.body;
 
   if (!pickup_location || !dropoff_locations?.length || !container_type || !final_price || !vehicle_id || !payment_type) {
     return res.status(400).json({ message: 'pickup_location, dropoff_locations, container_type, final_price, vehicle_id, payment_type are required' });
@@ -806,8 +843,9 @@ router.post('/trips/create', ...isAdmin, async (req, res) => {
 
     const { rows } = await pool.query(
       `INSERT INTO trips (client_id, client_name, client_phone, pickup_location, dropoff_locations,
-        container_type, admin_final_price, vehicle_id, driver_id, payment_type, status, system_estimated_price)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'approved',$7) RETURNING *`,
+        container_type, admin_final_price, vehicle_id, driver_id, payment_type,
+        weight_ton, cargo_items, is_double, status, system_estimated_price)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'approved',$7) RETURNING *`,
       [
         client_id || null,
         client_name || null,
@@ -819,6 +857,9 @@ router.post('/trips/create', ...isAdmin, async (req, res) => {
         vehicle_id,
         driver_id,
         payment_type,
+        weight_ton || null,
+        cargo_items || null,
+        is_double || false,
       ]
     );
     const trip = rows[0];
