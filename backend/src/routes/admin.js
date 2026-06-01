@@ -545,7 +545,7 @@ router.delete('/trips/:id', ...isAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM ledger_transactions WHERE trip_id = $1', [req.params.id]);
     await pool.query('DELETE FROM client_ledger_transactions WHERE trip_id = $1', [req.params.id]);
-    await pool.query('DELETE FROM notifications WHERE related_id = $1', [req.params.id]);
+    await pool.query('DELETE FROM notifications WHERE trip_id = $1', [req.params.id]);
     const { rows } = await pool.query('DELETE FROM trips WHERE id = $1 RETURNING id', [req.params.id]);
     if (!rows.length) return res.status(404).json({ message: 'Trip not found' });
     res.json({ message: 'Trip deleted' });
