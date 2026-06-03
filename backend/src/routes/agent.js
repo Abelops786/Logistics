@@ -200,4 +200,14 @@ router.post('/notifications/read-all', authenticate, requireRole('agent'), async
   }
 });
 
+// GET /api/agent/vehicles — list vehicles for bilty dropdown
+router.get('/vehicles', authenticate, requireRole('agent'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, plate_number, container_type FROM vehicles ORDER BY plate_number ASC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
 module.exports = router;

@@ -13,6 +13,7 @@ class Trip {
   final String? driverPhone;
   final String? paymentType;
   final bool agentRepriced;
+  final String? clientName;
 
   Trip({
     required this.id,
@@ -29,6 +30,7 @@ class Trip {
     this.driverPhone,
     this.paymentType,
     this.agentRepriced = false,
+    this.clientName,
   });
 
   factory Trip.fromJson(Map<String, dynamic> j) {
@@ -54,6 +56,7 @@ class Trip {
       driverPhone: j['driver_phone'],
       paymentType: j['payment_type'],
       agentRepriced: j['agent_repriced'] == true,
+      clientName: j['client_name'],
     );
   }
 

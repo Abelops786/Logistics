@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS bilty_submissions (
   bilty_file_type  TEXT,
   pod_file_base64  TEXT,
   pod_file_type    TEXT,
+  booking_date     DATE,
+  customer_name    TEXT,
+  vehicle_no       TEXT,
+  container_size   TEXT,
+  origin           TEXT,
+  destination      TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()
 );

@@ -43,11 +43,21 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
   }
 });
 
+// GET /api/trips/bilty/next-job — returns next auto job number
+router.get('/bilty/next-job', authenticate, requireRole('agent'), async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT last_value + 1 AS next FROM bilty_job_seq");
+    const next = rows[0]?.next || 1;
+    res.json({ job_number: String(next).padStart(3, '0') });
+  } catch (err) { res.status(500).json({ job_number: '—' }); }
+});
+
 // POST /api/trips/:id/bilty — agent uploads bilty number + document (image or PDF)
 router.post('/:id/bilty', authenticate, requireRole('agent'), async (req, res) => {
   const { bilty_number, bilty_file_base64, bilty_file_type,
           bilty_no, category, invoice_type, gross_weight_mt,
-          freight, pod_required, credit_term_days, transit_loss, image_base64 } = req.body;
+          freight, pod_required, credit_term_days, transit_loss, image_base64,
+          booking_date, customer_name, vehicle_no, container_size, origin, destination } = req.body;
   try {
     const tripRow = await pool.query(
       "SELECT * FROM trips WHERE id=$1 AND agent_id=$2 AND status='approved'",
@@ -59,9 +69,10 @@ router.post('/:id/bilty', authenticate, requireRole('agent'), async (req, res) =
     const { rows } = await pool.query(
       `INSERT INTO bilty_submissions
          (trip_id, agent_id, bilty_number, bilty_file_base64, bilty_file_type,
-          bilty_no, category, invoice_type, gross_weight_mt,
-          freight, pod_required, credit_term_days, transit_loss, image_base64)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          bilty_no, category, invoice_type, gross_weight_mt, freight,
+          pod_required, credit_term_days, transit_loss, image_base64,
+          booking_date, customer_name, vehicle_no, container_size, origin, destination)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        ON CONFLICT (trip_id) DO UPDATE SET
          bilty_number=COALESCE(EXCLUDED.bilty_number, bilty_submissions.bilty_number),
          bilty_file_base64=COALESCE(EXCLUDED.bilty_file_base64, bilty_submissions.bilty_file_base64),
@@ -75,12 +86,20 @@ router.post('/:id/bilty', authenticate, requireRole('agent'), async (req, res) =
          credit_term_days=COALESCE(EXCLUDED.credit_term_days, bilty_submissions.credit_term_days),
          transit_loss=COALESCE(EXCLUDED.transit_loss, bilty_submissions.transit_loss),
          image_base64=COALESCE(EXCLUDED.image_base64, bilty_submissions.image_base64),
+         booking_date=COALESCE(EXCLUDED.booking_date, bilty_submissions.booking_date),
+         customer_name=COALESCE(EXCLUDED.customer_name, bilty_submissions.customer_name),
+         vehicle_no=COALESCE(EXCLUDED.vehicle_no, bilty_submissions.vehicle_no),
+         container_size=COALESCE(EXCLUDED.container_size, bilty_submissions.container_size),
+         origin=COALESCE(EXCLUDED.origin, bilty_submissions.origin),
+         destination=COALESCE(EXCLUDED.destination, bilty_submissions.destination),
          updated_at=NOW()
        RETURNING *`,
       [req.params.id, req.user.id,
        bilty_number||null, bilty_file_base64||null, bilty_file_type||null,
        bilty_no||null, category||null, invoice_type||null, gross_weight_mt||null,
-       freight||null, pod_required||null, credit_term_days||null, transit_loss||null, image_base64||null]
+       freight||null, pod_required||null, credit_term_days||null, transit_loss||null, image_base64||null,
+       booking_date||null, customer_name||null, vehicle_no||null, container_size||null,
+       origin||null, destination||null]
     );
 
     // Notify all admins that bilty was uploaded
