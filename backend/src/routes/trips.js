@@ -78,6 +78,36 @@ router.post('/:id/bilty', authenticate, requireRole('agent'), async (req, res) =
   }
 });
 
+// POST /api/trips/:id/bilty/image — quick upload bilty photo only
+router.post('/:id/bilty/image', authenticate, requireRole('agent'), async (req, res) => {
+  const { image_base64 } = req.body;
+  if (!image_base64) return res.status(400).json({ message: 'image_base64 required' });
+  try {
+    await pool.query(
+      `INSERT INTO bilty_submissions (trip_id, agent_id, image_base64)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (trip_id) DO UPDATE SET image_base64=$3, updated_at=NOW()`,
+      [req.params.id, req.user.id, image_base64]
+    );
+    res.json({ message: 'Bilty image uploaded' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Server error' }); }
+});
+
+// POST /api/trips/:id/bilty/pod — quick upload POD photo only
+router.post('/:id/bilty/pod', authenticate, requireRole('agent'), async (req, res) => {
+  const { image_base64 } = req.body;
+  if (!image_base64) return res.status(400).json({ message: 'image_base64 required' });
+  try {
+    await pool.query(
+      `INSERT INTO bilty_submissions (trip_id, agent_id, pod_image_base64)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (trip_id) DO UPDATE SET pod_image_base64=$3, updated_at=NOW()`,
+      [req.params.id, req.user.id, image_base64]
+    );
+    res.json({ message: 'POD image uploaded' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Server error' }); }
+});
+
 // GET /api/trips/:id/bilty — agent views own bilty
 router.get('/:id/bilty', authenticate, requireRole('agent'), async (req, res) => {
   try {

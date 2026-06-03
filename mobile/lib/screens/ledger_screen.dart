@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/trip.dart';
@@ -192,29 +194,40 @@ class _LedgerScreenState extends State<LedgerScreen> {
           if (trip.status == 'quoted' && trip.adminFinalPrice != null)
             _quotedActionCard(context, trip, provider),
 
-          // APPROVED: Upload Bilty button
+          // APPROVED: Bilty + POD upload buttons
           if (trip.status == 'approved') ...[
             const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
+            Row(children: [
+              Expanded(child: _quickUploadBtn(
+                context, trip, provider,
+                label: 'Bilty',
+                icon: Icons.description_outlined,
+                color: Colors.blue.shade700,
+                endpoint: '/api/trips/${trip.id}/bilty/image',
+              )),
+              const SizedBox(width: 8),
+              Expanded(child: _quickUploadBtn(
+                context, trip, provider,
+                label: 'POD',
+                icon: Icons.check_circle_outline,
+                color: Colors.green.shade700,
+                endpoint: '/api/trips/${trip.id}/bilty/pod',
+              )),
+              const SizedBox(width: 8),
+              OutlinedButton(
                 onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => BiltyScreen(trip: trip)),
-                  );
+                  final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => BiltyScreen(trip: trip)));
                   if (result == true) provider.loadLedger();
                 },
-                icon: const Icon(Icons.upload_file, size: 18),
-                label: const Text('Upload Bilty', style: TextStyle(fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue.shade700,
-                  side: BorderSide(color: Colors.blue.shade300),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  foregroundColor: Colors.grey.shade600,
+                  side: BorderSide(color: Colors.grey.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
+                child: const Icon(Icons.more_horiz, size: 20),
               ),
-            ),
+            ]),
           ],
 
           // APPROVED: show final price + vehicle/driver
@@ -264,6 +277,40 @@ class _LedgerScreenState extends State<LedgerScreen> {
           const SizedBox(height: 6),
           Text('Tap to view details', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
         ]),
+      ),
+    );
+  }
+
+  Widget _quickUploadBtn(BuildContext context, Trip trip, AppProvider provider,
+      {required String label, required IconData icon, required Color color, required String endpoint}) {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        final picker = ImagePicker();
+        final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+        if (picked == null) return;
+        try {
+          final bytes = await picked.readAsBytes();
+          final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+          await ApiService.post(endpoint, {'image_base64': base64Str});
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('$label uploaded!'),
+              backgroundColor: color,
+            ));
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700));
+          }
+        }
+      },
+      icon: Icon(icon, size: 16),
+      label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: color,
+        side: BorderSide(color: color.withOpacity(0.5)),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
     );
   }

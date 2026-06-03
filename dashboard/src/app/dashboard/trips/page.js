@@ -720,12 +720,20 @@ function TripDetailsModal({ trip, onClose, onDone }) {
                   <div><p className="text-xs text-gray-400">Credit Term</p><p className="font-medium">{bilty.credit_term_days ? `${bilty.credit_term_days} Days` : '—'}</p></div>
                   <div className="col-span-2"><p className="text-xs text-gray-400">Transit Loss</p><p className="font-medium">{bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : '—'}</p></div>
                 </div>
-                {bilty.image_base64 && (
-                  <div className="mt-3">
-                    <p className="text-xs text-gray-400 mb-2">Bilty Image</p>
-                    <img src={bilty.image_base64} alt="Bilty" className="w-full rounded-lg border border-gray-200 max-h-64 object-contain" />
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-2">📄 Bilty Image</p>
+                    {bilty.image_base64
+                      ? <img src={bilty.image_base64} alt="Bilty" className="w-full rounded-lg border border-gray-200 max-h-48 object-contain" />
+                      : <div className="h-24 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Not uploaded</div>}
                   </div>
-                )}
+                  <div>
+                    <p className="text-xs text-gray-400 mb-2">✅ POD Image</p>
+                    {bilty.pod_image_base64
+                      ? <img src={bilty.pod_image_base64} alt="POD" className="w-full rounded-lg border border-gray-200 max-h-48 object-contain" />
+                      : <div className="h-24 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Not uploaded</div>}
+                  </div>
+                </div>
               </div>
             )}
           </div>
