@@ -754,40 +754,57 @@ function PodModal({ trip, onClose }) {
     finally { setUploading(false); }
   }
 
+  function DocSection({ label, src, fileType, downloadName }) {
+    if (!src) return null;
+    return (
+      <div className="border border-gray-200 rounded-lg p-3 mb-3">
+        <p className="text-xs font-semibold text-gray-500 mb-2">{label}</p>
+        {fileType === 'pdf' ? (
+          <a href={src} download={downloadName}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700">
+            📥 Download PDF
+          </a>
+        ) : (
+          <div>
+            <img src={src} alt={label} className="w-full rounded border border-gray-100 max-h-48 object-contain mb-2" />
+            <a href={src} download={downloadName}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+              📥 Download Image
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md">
+      <div className="bg-white rounded-lg w-full max-w-md flex flex-col" style={{ maxHeight: '90vh' }}>
         <div className="flex justify-between items-center p-5 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800">✅ POD — {trip.pickup_location?.slice(0,30)}</h3>
           <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
         </div>
-        <div className="p-5">
+        <div className="overflow-y-auto flex-1 p-5">
           {loading ? <div className="text-center text-gray-400 py-4">Loading...</div> : (
             <>
-              {bilty?.pod_file_base64 ? (
-                <div className="mb-4">
-                  {bilty.pod_file_type === 'pdf' ? (
-                    <a href={bilty.pod_file_base64} download="POD.pdf"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700 mb-3">
-                      📥 Download POD PDF
-                    </a>
-                  ) : (
-                    <div className="mb-3">
-                      <img src={bilty.pod_file_base64} alt="POD" className="w-full rounded border border-gray-200 max-h-56 object-contain mb-2" />
-                      <a href={bilty.pod_file_base64} download="POD.jpg"
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
-                        📥 Download Image
-                      </a>
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-400">Upload new to replace:</p>
-                </div>
+              {/* Agent's POD (uploaded from app) */}
+              <p className="text-xs font-semibold text-gray-400 uppercase mb-2">📱 Agent Upload (App)</p>
+              {bilty?.pod_image_base64 ? (
+                <DocSection label="Agent POD" src={bilty.pod_image_base64} fileType="image" downloadName="POD_Agent.jpg" />
               ) : (
-                <p className="text-sm text-gray-500 mb-4">No POD uploaded yet. Upload when proof of delivery is received from the client.</p>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3 text-xs text-yellow-700">
+                  Agent has not uploaded POD from the app yet.
+                </div>
+              )}
+
+              {/* Admin's POD (uploaded from dashboard) */}
+              <p className="text-xs font-semibold text-gray-400 uppercase mb-2 mt-2">🖥️ Admin Upload (Dashboard)</p>
+              {bilty?.pod_file_base64 && (
+                <DocSection label="Admin POD" src={bilty.pod_file_base64} fileType={bilty.pod_file_type} downloadName={bilty.pod_file_type === 'pdf' ? 'POD_Admin.pdf' : 'POD_Admin.jpg'} />
               )}
               <label className={`inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer ${uploading ? 'bg-gray-300 text-gray-500' : 'bg-green-700 text-white hover:bg-green-800'}`}>
                 <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFile} disabled={uploading} />
-                {uploading ? 'Uploading...' : '📎 Upload POD (Image or PDF)'}
+                {uploading ? 'Uploading...' : bilty?.pod_file_base64 ? '📎 Replace POD' : '📎 Upload POD (Image or PDF)'}
               </label>
             </>
           )}
