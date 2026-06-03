@@ -42,4 +42,53 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
   }
 });
 
+// POST /api/trips/:id/bilty — agent submits bilty for an approved trip
+router.post('/:id/bilty', authenticate, requireRole('agent'), async (req, res) => {
+  const { bilty_no, category, invoice_type, gross_weight_mt, freight,
+          pod_required, credit_term_days, transit_loss, image_base64 } = req.body;
+  try {
+    const tripRow = await pool.query(
+      "SELECT * FROM trips WHERE id=$1 AND agent_id=$2 AND status='approved'",
+      [req.params.id, req.user.id]
+    );
+    if (!tripRow.rows.length)
+      return res.status(404).json({ message: 'Trip not found or not approved' });
+
+    // Upsert — allow re-upload
+    const { rows } = await pool.query(
+      `INSERT INTO bilty_submissions
+         (trip_id, agent_id, bilty_no, category, invoice_type, gross_weight_mt,
+          freight, pod_required, credit_term_days, transit_loss, image_base64)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ON CONFLICT (trip_id) DO UPDATE SET
+         bilty_no=EXCLUDED.bilty_no, category=EXCLUDED.category,
+         invoice_type=EXCLUDED.invoice_type, gross_weight_mt=EXCLUDED.gross_weight_mt,
+         freight=EXCLUDED.freight, pod_required=EXCLUDED.pod_required,
+         credit_term_days=EXCLUDED.credit_term_days, transit_loss=EXCLUDED.transit_loss,
+         image_base64=EXCLUDED.image_base64, updated_at=NOW()
+       RETURNING *`,
+      [req.params.id, req.user.id, bilty_no||null, category||null, invoice_type||null,
+       gross_weight_mt||null, freight||null, pod_required||null,
+       credit_term_days||null, transit_loss||null, image_base64||null]
+    );
+    res.status(201).json({ message: 'Bilty uploaded successfully', bilty: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/trips/:id/bilty — agent views own bilty
+router.get('/:id/bilty', authenticate, requireRole('agent'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM bilty_submissions WHERE trip_id=$1 AND agent_id=$2',
+      [req.params.id, req.user.id]
+    );
+    res.json({ bilty: rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

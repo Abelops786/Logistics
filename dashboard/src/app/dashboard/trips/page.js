@@ -599,6 +599,25 @@ function TripDetailsModal({ trip, onClose, onDone }) {
   const [penalty, setPenalty] = useState('');
   const [applying, setApplying] = useState(false);
   const [penaltyError, setPenaltyError] = useState('');
+  const [bilty, setBilty] = useState(null);
+  const [biltyLoading, setBiltyLoading] = useState(true);
+  const [notifying, setNotifying] = useState(false);
+
+  useEffect(() => {
+    api.get(`/api/admin/trips/${trip.id}/bilty`)
+      .then((r) => setBilty(r.data.bilty))
+      .catch(() => {})
+      .finally(() => setBiltyLoading(false));
+  }, [trip.id]);
+
+  async function sendBiltyReminder() {
+    setNotifying(true);
+    try {
+      await api.post(`/api/admin/trips/${trip.id}/notify-bilty`, {});
+      alert('Notification sent to agent!');
+    } catch { alert('Failed to send notification'); }
+    finally { setNotifying(false); }
+  }
   const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
   const total = (parseFloat(trip.admin_final_price) || 0) + (parseFloat(trip.detention_penalty) || 0);
 
@@ -671,6 +690,46 @@ function TripDetailsModal({ trip, onClose, onDone }) {
           {trip.completion_notes && <Row label="Completion Notes" value={trip.completion_notes} />}
           {trip.not_complete_reason && <Row label="Not Complete Reason" value={trip.not_complete_reason} color="text-red-600" />}
         </div>
+
+        {/* Bilty Section */}
+        {trip.status === 'approved' && (
+          <div className="mt-4 border border-blue-200 rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-b border-blue-200">
+              <p className="text-sm font-semibold text-blue-800">📄 Bilty</p>
+              {!biltyLoading && !bilty && (
+                <button onClick={sendBiltyReminder} disabled={notifying}
+                  className="px-3 py-1 bg-orange-500 text-white text-xs rounded font-medium hover:bg-orange-600 disabled:opacity-50">
+                  {notifying ? 'Sending...' : '🔔 Notify Agent'}
+                </button>
+              )}
+            </div>
+            {biltyLoading ? (
+              <div className="p-4 text-center text-gray-400 text-sm">Loading...</div>
+            ) : !bilty ? (
+              <div className="p-4 text-center text-gray-400 text-sm">No bilty uploaded yet.</div>
+            ) : (
+              <div className="p-4 space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><p className="text-xs text-gray-400">Job No</p><p className="font-bold text-blue-600">#{String(bilty.job_number).padStart(3,'0')}</p></div>
+                  <div><p className="text-xs text-gray-400">Bilty No</p><p className="font-medium">{bilty.bilty_no || '—'}</p></div>
+                  <div><p className="text-xs text-gray-400">Category</p><p className="font-medium capitalize">{bilty.category?.replace('_',' ') || '—'}</p></div>
+                  <div><p className="text-xs text-gray-400">Invoice</p><p className="font-medium">{bilty.invoice_type === 'gst' ? 'GST' : bilty.invoice_type === 'non_gst' ? 'Non-GST' : '—'}</p></div>
+                  <div><p className="text-xs text-gray-400">Gross Weight</p><p className="font-medium">{bilty.gross_weight_mt ? `${bilty.gross_weight_mt} MT` : '—'}</p></div>
+                  <div><p className="text-xs text-gray-400">Freight</p><p className="font-medium">{bilty.freight ? `Rs. ${parseFloat(bilty.freight).toLocaleString()}` : '—'}</p></div>
+                  <div><p className="text-xs text-gray-400">POD Required</p><p className="font-medium capitalize">{bilty.pod_required || '—'}</p></div>
+                  <div><p className="text-xs text-gray-400">Credit Term</p><p className="font-medium">{bilty.credit_term_days ? `${bilty.credit_term_days} Days` : '—'}</p></div>
+                  <div className="col-span-2"><p className="text-xs text-gray-400">Transit Loss</p><p className="font-medium">{bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : '—'}</p></div>
+                </div>
+                {bilty.image_base64 && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-400 mb-2">Bilty Image</p>
+                    <img src={bilty.image_base64} alt="Bilty" className="w-full rounded-lg border border-gray-200 max-h-64 object-contain" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Detention Penalty — approved trips only; completed = view only */}
         {trip.status === 'approved' ? (

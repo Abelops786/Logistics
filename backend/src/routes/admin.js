@@ -594,6 +594,43 @@ router.put('/trips/:id', ...isAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/trips/:id/bilty
+router.get('/trips/:id/bilty', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM bilty_submissions WHERE trip_id=$1',
+      [req.params.id]
+    );
+    res.json({ bilty: rows[0] || null });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/admin/trips/:id/notify-bilty — remind agent to upload bilty
+router.post('/trips/:id/notify-bilty', ...isAdmin, async (req, res) => {
+  try {
+    const tripRow = await pool.query(
+      `SELECT t.*, u.id AS uid, u.name AS agent_name, u.phone AS agent_phone
+       FROM trips t LEFT JOIN users u ON u.id=t.agent_id WHERE t.id=$1`,
+      [req.params.id]
+    );
+    if (!tripRow.rows.length) return res.status(404).json({ message: 'Trip not found' });
+    const trip = tripRow.rows[0];
+    const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
+    const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
+    await notify(trip.uid,
+      '📄 Bilty Upload Required',
+      `Please upload the bilty for your trip: ${route}`,
+      'bilty_reminder', trip.id
+    );
+    res.json({ message: 'Notification sent to agent' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // POST /api/admin/trips/:id/complete
 router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
   const { notes } = req.body;

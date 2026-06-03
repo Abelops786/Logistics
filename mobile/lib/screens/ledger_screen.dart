@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/trip.dart';
 import '../services/api_service.dart';
+import 'bilty_screen.dart';
 
 class LedgerScreen extends StatefulWidget {
   const LedgerScreen({super.key});
@@ -190,6 +191,31 @@ class _LedgerScreenState extends State<LedgerScreen> {
           // QUOTED: admin has priced it, agent needs to respond
           if (trip.status == 'quoted' && trip.adminFinalPrice != null)
             _quotedActionCard(context, trip, provider),
+
+          // APPROVED: Upload Bilty button
+          if (trip.status == 'approved') ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => BiltyScreen(trip: trip)),
+                  );
+                  if (result == true) provider.loadLedger();
+                },
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: const Text('Upload Bilty', style: TextStyle(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue.shade700,
+                  side: BorderSide(color: Colors.blue.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ),
+          ],
 
           // APPROVED: show final price + vehicle/driver
           if (trip.status == 'approved' && trip.adminFinalPrice != null) ...[
