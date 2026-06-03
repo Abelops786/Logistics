@@ -6,6 +6,7 @@ import '../providers/app_provider.dart';
 import '../models/trip.dart';
 import '../services/api_service.dart';
 import 'bilty_screen.dart';
+import 'bilty_upload_screen.dart';
 
 class LedgerScreen extends StatefulWidget {
   const LedgerScreen({super.key});
@@ -198,12 +199,20 @@ class _LedgerScreenState extends State<LedgerScreen> {
           if (trip.status == 'approved') ...[
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: _quickUploadBtn(
-                context, trip, provider,
-                label: 'Bilty',
-                icon: Icons.description_outlined,
-                color: Colors.blue.shade700,
-                endpoint: '/api/trips/${trip.id}/bilty/image',
+              Expanded(child: OutlinedButton.icon(
+                onPressed: () async {
+                  final result = await Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => BiltyUploadScreen(trip: trip)));
+                  if (result == true) provider.loadLedger();
+                },
+                icon: const Icon(Icons.description_outlined, size: 16),
+                label: const Text('Bilty', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.blue.shade700,
+                  side: BorderSide(color: Colors.blue.shade300),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
               )),
               const SizedBox(width: 8),
               Expanded(child: _quickUploadBtn(

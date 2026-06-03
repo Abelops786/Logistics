@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { sendWhatsApp, sendEmail } = require('../services/notificationService');
+const { notify } = require('../services/notifyAgent');
 
 const router = express.Router();
 
@@ -42,10 +43,11 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
   }
 });
 
-// POST /api/trips/:id/bilty — agent submits bilty for an approved trip
+// POST /api/trips/:id/bilty — agent uploads bilty number + document (image or PDF)
 router.post('/:id/bilty', authenticate, requireRole('agent'), async (req, res) => {
-  const { bilty_no, category, invoice_type, gross_weight_mt, freight,
-          pod_required, credit_term_days, transit_loss, image_base64 } = req.body;
+  const { bilty_number, bilty_file_base64, bilty_file_type,
+          bilty_no, category, invoice_type, gross_weight_mt,
+          freight, pod_required, credit_term_days, transit_loss, image_base64 } = req.body;
   try {
     const tripRow = await pool.query(
       "SELECT * FROM trips WHERE id=$1 AND agent_id=$2 AND status='approved'",
@@ -54,23 +56,44 @@ router.post('/:id/bilty', authenticate, requireRole('agent'), async (req, res) =
     if (!tripRow.rows.length)
       return res.status(404).json({ message: 'Trip not found or not approved' });
 
-    // Upsert — allow re-upload
     const { rows } = await pool.query(
       `INSERT INTO bilty_submissions
-         (trip_id, agent_id, bilty_no, category, invoice_type, gross_weight_mt,
+         (trip_id, agent_id, bilty_number, bilty_file_base64, bilty_file_type,
+          bilty_no, category, invoice_type, gross_weight_mt,
           freight, pod_required, credit_term_days, transit_loss, image_base64)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (trip_id) DO UPDATE SET
-         bilty_no=EXCLUDED.bilty_no, category=EXCLUDED.category,
-         invoice_type=EXCLUDED.invoice_type, gross_weight_mt=EXCLUDED.gross_weight_mt,
-         freight=EXCLUDED.freight, pod_required=EXCLUDED.pod_required,
-         credit_term_days=EXCLUDED.credit_term_days, transit_loss=EXCLUDED.transit_loss,
-         image_base64=EXCLUDED.image_base64, updated_at=NOW()
+         bilty_number=COALESCE(EXCLUDED.bilty_number, bilty_submissions.bilty_number),
+         bilty_file_base64=COALESCE(EXCLUDED.bilty_file_base64, bilty_submissions.bilty_file_base64),
+         bilty_file_type=COALESCE(EXCLUDED.bilty_file_type, bilty_submissions.bilty_file_type),
+         bilty_no=COALESCE(EXCLUDED.bilty_no, bilty_submissions.bilty_no),
+         category=COALESCE(EXCLUDED.category, bilty_submissions.category),
+         invoice_type=COALESCE(EXCLUDED.invoice_type, bilty_submissions.invoice_type),
+         gross_weight_mt=COALESCE(EXCLUDED.gross_weight_mt, bilty_submissions.gross_weight_mt),
+         freight=COALESCE(EXCLUDED.freight, bilty_submissions.freight),
+         pod_required=COALESCE(EXCLUDED.pod_required, bilty_submissions.pod_required),
+         credit_term_days=COALESCE(EXCLUDED.credit_term_days, bilty_submissions.credit_term_days),
+         transit_loss=COALESCE(EXCLUDED.transit_loss, bilty_submissions.transit_loss),
+         image_base64=COALESCE(EXCLUDED.image_base64, bilty_submissions.image_base64),
+         updated_at=NOW()
        RETURNING *`,
-      [req.params.id, req.user.id, bilty_no||null, category||null, invoice_type||null,
-       gross_weight_mt||null, freight||null, pod_required||null,
-       credit_term_days||null, transit_loss||null, image_base64||null]
+      [req.params.id, req.user.id,
+       bilty_number||null, bilty_file_base64||null, bilty_file_type||null,
+       bilty_no||null, category||null, invoice_type||null, gross_weight_mt||null,
+       freight||null, pod_required||null, credit_term_days||null, transit_loss||null, image_base64||null]
     );
+
+    // Notify all admins that bilty was uploaded
+    const admins = await pool.query("SELECT id FROM users WHERE role IN ('admin','super_admin') AND status='active'");
+    const trip = tripRow.rows[0];
+    const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations||'[]');
+    const route = `${trip.pickup_location} → ${drops.join(' → ')}`;
+    for (const admin of admins.rows) {
+      await notify(admin.id, '📄 Bilty Uploaded',
+        `${req.user.name} uploaded bilty for trip: ${route}`,
+        'bilty_uploaded', trip.id).catch(() => {});
+    }
+
     res.status(201).json({ message: 'Bilty uploaded successfully', bilty: rows[0] });
   } catch (err) {
     console.error(err);

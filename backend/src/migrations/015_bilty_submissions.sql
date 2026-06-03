@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS bilty_submissions (
   transit_loss     TEXT CHECK (transit_loss IN ('customer','transporter')),
   image_base64     TEXT,
   pod_image_base64 TEXT,
+  bilty_number     TEXT,
+  bilty_file_base64 TEXT,
+  bilty_file_type  TEXT,
+  pod_file_base64  TEXT,
+  pod_file_type    TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()
 );

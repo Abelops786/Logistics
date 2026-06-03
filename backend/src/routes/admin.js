@@ -594,6 +594,37 @@ router.put('/trips/:id', ...isAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/trips/:id/pod — admin uploads POD document (image or PDF)
+router.post('/trips/:id/pod', ...isAdmin, async (req, res) => {
+  const { pod_file_base64, pod_file_type } = req.body;
+  if (!pod_file_base64) return res.status(400).json({ message: 'pod_file_base64 required' });
+  try {
+    const tripRow = await pool.query("SELECT * FROM trips WHERE id=$1 AND status='completed'", [req.params.id]);
+    if (!tripRow.rows.length) return res.status(404).json({ message: 'Trip not found or not completed' });
+    const trip = tripRow.rows[0];
+
+    await pool.query(
+      `INSERT INTO bilty_submissions (trip_id, pod_file_base64, pod_file_type)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (trip_id) DO UPDATE SET pod_file_base64=$2, pod_file_type=$3, updated_at=NOW()`,
+      [req.params.id, pod_file_base64, pod_file_type || 'image']
+    );
+
+    // Notify agent that POD has been uploaded
+    if (trip.agent_id) {
+      const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations||'[]');
+      await notify(trip.agent_id, '✅ POD Uploaded',
+        `Proof of delivery has been uploaded for your trip: ${trip.pickup_location} → ${drops.join(' → ')}`,
+        'pod_uploaded', trip.id).catch(() => {});
+    }
+
+    res.json({ message: 'POD uploaded successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /api/admin/trips/:id/bilty
 router.get('/trips/:id/bilty', ...isAdmin, async (req, res) => {
   try {

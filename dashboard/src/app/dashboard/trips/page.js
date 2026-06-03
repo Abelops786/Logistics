@@ -594,6 +594,54 @@ function NotCompleteModal({ trip, onClose, onDone }) {
   );
 }
 
+// ── POD Upload Section (inside TripDetailsModal for completed trips) ──────────
+function PodUploadSection({ tripId, bilty, onUploaded }) {
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result;
+        const fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+        await api.post(`/api/admin/trips/${tripId}/pod`, { pod_file_base64: base64, pod_file_type: fileType });
+        onUploaded();
+        alert('POD uploaded successfully!');
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Upload failed');
+    } finally { setUploading(false); }
+  }
+
+  return (
+    <div className="mt-3 border border-green-200 bg-green-50 rounded-lg p-4">
+      <p className="text-sm font-semibold text-green-800 mb-1">✅ Proof of Delivery (POD)</p>
+      {bilty?.pod_file_base64 ? (
+        <div>
+          <p className="text-xs text-green-700 mb-2">POD already uploaded.</p>
+          {bilty.pod_file_type === 'pdf' ? (
+            <a href={bilty.pod_file_base64} download="POD.pdf"
+              className="text-xs text-blue-600 underline">Download PDF</a>
+          ) : (
+            <img src={bilty.pod_file_base64} alt="POD" className="w-full rounded border border-green-200 max-h-48 object-contain mt-2" />
+          )}
+          <p className="text-xs text-gray-400 mt-2">Upload again to replace:</p>
+        </div>
+      ) : (
+        <p className="text-xs text-green-700 mb-2">Upload the Proof of Delivery document received from the client.</p>
+      )}
+      <label className={`inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer mt-1 ${uploading ? 'bg-gray-300 text-gray-500' : 'bg-green-700 text-white hover:bg-green-800'}`}>
+        <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFile} disabled={uploading} />
+        {uploading ? 'Uploading...' : '📎 Upload POD (Image or PDF)'}
+      </label>
+    </div>
+  );
+}
+
 // ── View Trip Details Modal ──────────────────────────────────────
 function TripDetailsModal({ trip, onClose, onDone }) {
   const [penalty, setPenalty] = useState('');
@@ -711,7 +759,7 @@ function TripDetailsModal({ trip, onClose, onDone }) {
               <div className="p-4 space-y-2">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div><p className="text-xs text-gray-400">Job No</p><p className="font-bold text-blue-600">#{String(bilty.job_number).padStart(3,'0')}</p></div>
-                  <div><p className="text-xs text-gray-400">Bilty No</p><p className="font-medium">{bilty.bilty_no || '—'}</p></div>
+                  <div><p className="text-xs text-gray-400">Bilty Number</p><p className="font-bold text-gray-800">{bilty.bilty_number || bilty.bilty_no || '—'}</p></div>
                   <div><p className="text-xs text-gray-400">Category</p><p className="font-medium capitalize">{bilty.category?.replace('_',' ') || '—'}</p></div>
                   <div><p className="text-xs text-gray-400">Invoice</p><p className="font-medium">{bilty.invoice_type === 'gst' ? 'GST' : bilty.invoice_type === 'non_gst' ? 'Non-GST' : '—'}</p></div>
                   <div><p className="text-xs text-gray-400">Gross Weight</p><p className="font-medium">{bilty.gross_weight_mt ? `${bilty.gross_weight_mt} MT` : '—'}</p></div>
@@ -720,20 +768,20 @@ function TripDetailsModal({ trip, onClose, onDone }) {
                   <div><p className="text-xs text-gray-400">Credit Term</p><p className="font-medium">{bilty.credit_term_days ? `${bilty.credit_term_days} Days` : '—'}</p></div>
                   <div className="col-span-2"><p className="text-xs text-gray-400">Transit Loss</p><p className="font-medium">{bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : '—'}</p></div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div>
-                    <p className="text-xs text-gray-400 mb-2">📄 Bilty Image</p>
-                    {bilty.image_base64
-                      ? <img src={bilty.image_base64} alt="Bilty" className="w-full rounded-lg border border-gray-200 max-h-48 object-contain" />
-                      : <div className="h-24 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Not uploaded</div>}
+                {/* Bilty document */}
+                {(bilty.bilty_file_base64 || bilty.image_base64) && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-400 mb-2">📄 Bilty Document</p>
+                    {(bilty.bilty_file_type === 'pdf') ? (
+                      <a href={bilty.bilty_file_base64} download="Bilty.pdf"
+                        className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 hover:bg-red-100 w-fit">
+                        📥 Download Bilty PDF
+                      </a>
+                    ) : (
+                      <img src={bilty.bilty_file_base64 || bilty.image_base64} alt="Bilty" className="w-full rounded-lg border border-gray-200 max-h-48 object-contain" />
+                    )}
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-2">✅ POD Image</p>
-                    {bilty.pod_image_base64
-                      ? <img src={bilty.pod_image_base64} alt="POD" className="w-full rounded-lg border border-gray-200 max-h-48 object-contain" />
-                      : <div className="h-24 bg-gray-50 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">Not uploaded</div>}
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -758,9 +806,10 @@ function TripDetailsModal({ trip, onClose, onDone }) {
             </form>
           </div>
         ) : trip.status === 'completed' ? (
-          <div className="mt-2 p-3 bg-blue-50 rounded text-xs text-blue-700 text-center border border-blue-200">
-            ✓ This trip is <strong>Completed</strong> — view only.
-          </div>
+          <PodUploadSection tripId={trip.id} bilty={bilty} onUploaded={() => {
+            api.get(`/api/admin/trips/${trip.id}/bilty`).then(r => setBilty(r.data.bilty)).catch(()=>{});
+          }} />
+
         ) : trip.status === 'not_complete' ? (
           <div className="mt-2 p-3 bg-orange-50 rounded text-xs text-orange-700 text-center border border-orange-200">
             ✕ Marked <strong>Not Complete</strong>. Use <strong>Re-Assign</strong> to update pricing, then <strong>Complete</strong>.
