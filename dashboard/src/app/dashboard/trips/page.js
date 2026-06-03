@@ -517,15 +517,29 @@ function AssignModal({ trip, vehicles, onClose, onAssigned }) {
 function CompleteModal({ trip, onClose, onDone }) {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  async function submit(e) {
-    e.preventDefault();
+  const [checking, setChecking] = useState(true);
+  const [hasBilty, setHasBilty] = useState(false);
+  const [hasPod, setHasPod] = useState(false);
+
+  useEffect(() => {
+    api.get(`/api/admin/trips/${trip.id}/bilty-check`)
+      .then(r => { setHasBilty(r.data.hasBilty); setHasPod(r.data.hasPod); })
+      .catch(() => {})
+      .finally(() => setChecking(false));
+  }, [trip.id]);
+
+  const bothUploaded = hasBilty && hasPod;
+  const missing = !hasBilty && !hasPod ? 'Bilty and POD' : !hasBilty ? 'Bilty' : 'POD';
+
+  async function submit(force = false) {
     setLoading(true);
     try {
-      await api.post(`/api/admin/trips/${trip.id}/complete`, { notes });
+      await api.post(`/api/admin/trips/${trip.id}/complete`, { notes, force });
       onDone(); onClose();
     } catch (err) { alert(err.response?.data?.message || 'Failed'); }
     finally { setLoading(false); }
   }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -533,21 +547,41 @@ function CompleteModal({ trip, onClose, onDone }) {
           <h3 className="font-semibold text-green-700">✓ Mark Trip Complete</h3>
           <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
         </div>
-        <p className="text-sm text-gray-500 mb-4">{trip.pickup_location} → {(Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]')).join(' → ')}</p>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
-              placeholder="Add any completion notes for the record..."
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500" />
+        <p className="text-sm text-gray-500 mb-3">{trip.pickup_location} → {(Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]')).join(' → ')}</p>
+
+        {/* Bilty + POD check */}
+        {checking ? (
+          <div className="text-center text-gray-400 text-sm py-2 mb-3">Checking bilty & POD status...</div>
+        ) : (
+          <div className={`rounded-lg p-3 mb-4 ${bothUploaded ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className="flex gap-4 text-sm mb-1">
+              <span className={hasBilty ? 'text-green-700 font-medium' : 'text-red-600 font-medium'}>{hasBilty ? '✅ Bilty' : '❌ Bilty missing'}</span>
+              <span className={hasPod ? 'text-green-700 font-medium' : 'text-red-600 font-medium'}>{hasPod ? '✅ POD' : '❌ POD missing'}</span>
+            </div>
+            {!bothUploaded && <p className="text-xs text-red-600">⚠️ {missing} not uploaded yet. You can Force Complete or cancel and wait.</p>}
           </div>
-          <div className="flex gap-3">
-            <button type="submit" disabled={loading} className="flex-1 bg-green-700 text-white py-2 rounded text-sm font-medium hover:bg-green-800 disabled:opacity-50">
-              {loading ? 'Completing...' : '✓ Confirm Complete'}
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+            placeholder="Add any completion notes..."
+            className="w-full border border-gray-300 rounded px-3 py-2 text-sm resize-none" />
+        </div>
+        <div className="flex gap-3 mt-4">
+          {bothUploaded ? (
+            <button onClick={() => submit(false)} disabled={loading || checking}
+              className="flex-1 bg-green-700 text-white py-2 rounded text-sm font-medium hover:bg-green-800 disabled:opacity-50">
+              {loading ? 'Completing...' : '✓ Complete Trip'}
             </button>
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">Cancel</button>
-          </div>
-        </form>
+          ) : (
+            <button onClick={() => submit(true)} disabled={loading || checking}
+              className="flex-1 bg-orange-600 text-white py-2 rounded text-sm font-medium hover:bg-orange-700 disabled:opacity-50">
+              {loading ? 'Completing...' : '⚡ Force Complete'}
+            </button>
+          )}
+          <button onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">Cancel</button>
+        </div>
       </div>
     </div>
   );
@@ -589,6 +623,175 @@ function NotCompleteModal({ trip, onClose, onDone }) {
             <button type="button" onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded text-sm hover:bg-gray-50">Cancel</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Bilty View Modal ─────────────────────────────────────────────────────────
+function BiltyViewModal({ trip, onClose }) {
+  const [bilty, setBilty] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notifying, setNotifying] = useState(false);
+
+  useEffect(() => {
+    api.get(`/api/admin/trips/${trip.id}/bilty`)
+      .then(r => setBilty(r.data.bilty))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [trip.id]);
+
+  async function notify() {
+    setNotifying(true);
+    try { await api.post(`/api/admin/trips/${trip.id}/notify-bilty`, {}); alert('Notification sent!'); }
+    catch { alert('Failed'); } finally { setNotifying(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-lg flex flex-col" style={{ maxHeight: '90vh' }}>
+        <div className="flex justify-between items-center p-5 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">📄 Bilty — {trip.pickup_location?.slice(0,30)}</h3>
+          <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5">
+          {loading ? <div className="text-center text-gray-400 py-8">Loading...</div>
+          : !bilty ? (
+            <div className="text-center py-8">
+              <p className="text-gray-400 mb-4">No bilty uploaded by agent yet.</p>
+              <button onClick={notify} disabled={notifying}
+                className="px-4 py-2 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 disabled:opacity-50">
+                {notifying ? 'Sending...' : '🔔 Notify Agent to Upload Bilty'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-bold text-blue-600">Job #{String(bilty.job_number).padStart(3,'0')}</span>
+                <button onClick={notify} disabled={notifying}
+                  className="px-3 py-1 bg-orange-500 text-white text-xs rounded font-medium hover:bg-orange-600 disabled:opacity-50">
+                  {notifying ? '...' : '🔔 Notify Agent'}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {[
+                  ['Bilty No', bilty.bilty_number || bilty.bilty_no],
+                  ['Booking Date', bilty.booking_date?.slice(0,10)],
+                  ['Customer', bilty.customer_name],
+                  ['Category', bilty.category?.replace('_',' ')],
+                  ['Invoice', bilty.invoice_type === 'gst' ? 'GST' : 'Non-GST'],
+                  ['Vehicle', bilty.vehicle_no],
+                  ['Container', bilty.container_size],
+                  ['Origin', bilty.origin],
+                  ['Destination', bilty.destination],
+                  ['Gross Weight', bilty.gross_weight_mt ? `${bilty.gross_weight_mt} MT` : null],
+                  ['Freight', bilty.freight ? `Rs. ${parseFloat(bilty.freight).toLocaleString()}` : null],
+                  ['POD Required', bilty.pod_required],
+                  ['Credit Term', bilty.credit_term_days ? `${bilty.credit_term_days} Days` : null],
+                  ['Transit Loss', bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : null],
+                ].filter(([,v]) => v).map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-xs text-gray-400">{label}</p>
+                    <p className="font-medium capitalize">{value}</p>
+                  </div>
+                ))}
+              </div>
+              {(bilty.bilty_file_base64 || bilty.image_base64) && (
+                <div className="border-t pt-3">
+                  <p className="text-xs text-gray-500 font-medium mb-2">Bilty Document</p>
+                  {bilty.bilty_file_type === 'pdf' ? (
+                    <a href={bilty.bilty_file_base64} download="Bilty.pdf"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
+                      📥 Download Bilty PDF
+                    </a>
+                  ) : (
+                    <div>
+                      <img src={bilty.bilty_file_base64 || bilty.image_base64} alt="Bilty" className="w-full rounded border border-gray-200 max-h-64 object-contain mb-2" />
+                      <a href={bilty.bilty_file_base64 || bilty.image_base64} download="Bilty.jpg"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+                        📥 Download Image
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── POD Modal ─────────────────────────────────────────────────────────────────
+function PodModal({ trip, onClose }) {
+  const [bilty, setBilty] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    api.get(`/api/admin/trips/${trip.id}/bilty`)
+      .then(r => setBilty(r.data.bilty))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [trip.id]);
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+        await api.post(`/api/admin/trips/${trip.id}/pod`, { pod_file_base64: reader.result, pod_file_type: fileType });
+        const r = await api.get(`/api/admin/trips/${trip.id}/bilty`);
+        setBilty(r.data.bilty);
+        alert('POD uploaded successfully!');
+      };
+      reader.readAsDataURL(file);
+    } catch { alert('Upload failed'); }
+    finally { setUploading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-md">
+        <div className="flex justify-between items-center p-5 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">✅ POD — {trip.pickup_location?.slice(0,30)}</h3>
+          <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
+        </div>
+        <div className="p-5">
+          {loading ? <div className="text-center text-gray-400 py-4">Loading...</div> : (
+            <>
+              {bilty?.pod_file_base64 ? (
+                <div className="mb-4">
+                  {bilty.pod_file_type === 'pdf' ? (
+                    <a href={bilty.pod_file_base64} download="POD.pdf"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700 mb-3">
+                      📥 Download POD PDF
+                    </a>
+                  ) : (
+                    <div className="mb-3">
+                      <img src={bilty.pod_file_base64} alt="POD" className="w-full rounded border border-gray-200 max-h-56 object-contain mb-2" />
+                      <a href={bilty.pod_file_base64} download="POD.jpg"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+                        📥 Download Image
+                      </a>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400">Upload new to replace:</p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">No POD uploaded yet. Upload when proof of delivery is received from the client.</p>
+              )}
+              <label className={`inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer ${uploading ? 'bg-gray-300 text-gray-500' : 'bg-green-700 text-white hover:bg-green-800'}`}>
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFile} disabled={uploading} />
+                {uploading ? 'Uploading...' : '📎 Upload POD (Image or PDF)'}
+              </label>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -888,6 +1091,8 @@ export default function TripsPage() {
   const [viewTrip, setViewTrip] = useState(null);
   const [createTrip, setCreateTrip] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [biltyTrip, setBiltyTrip] = useState(null);  // for bilty view modal
+  const [podTrip, setPodTrip] = useState(null);       // for pod upload modal
 
   async function load() {
     setLoading(true);
@@ -987,6 +1192,7 @@ export default function TripsPage() {
                     <p className="text-xs text-gray-500 mt-1">
                       Agent: {trip.agent_name} • {containerLabel(trip.container_type)}
                       {trip.is_double && <span className="ml-2 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">Double</span>}
+                      {trip.force_completed && <span className="ml-2 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">⚡ Force Completed</span>}
                       {trip.client_name && <span className="ml-2 text-gray-400">Client: {trip.client_name}{trip.client_name_2 ? ` & ${trip.client_name_2}` : ''}</span>}
                     </p>
                     {(trip.weight_ton || trip.cargo_items) && (
@@ -1018,6 +1224,18 @@ export default function TripsPage() {
                       className="px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded text-xs font-medium hover:bg-yellow-100">
                       Edit
                     </button>
+                    {['approved','completed','not_complete'].includes(trip.status) && (
+                      <>
+                        <button onClick={() => setBiltyTrip(trip)}
+                          className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-medium hover:bg-blue-100">
+                          📄 Bilty
+                        </button>
+                        <button onClick={() => setPodTrip(trip)}
+                          className="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded text-xs font-medium hover:bg-green-100">
+                          📎 POD
+                        </button>
+                      </>
+                    )}
                     <button onClick={() => handleDelete(trip)} disabled={deletingId === trip.id}
                       className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded text-xs font-medium hover:bg-red-100 disabled:opacity-40">
                       {deletingId === trip.id ? '...' : 'Delete'}
@@ -1066,6 +1284,8 @@ export default function TripsPage() {
       {completeTrip && <CompleteModal trip={completeTrip} onClose={() => setCompleteTrip(null)} onDone={load} />}
       {notCompleteTrip && <NotCompleteModal trip={notCompleteTrip} onClose={() => setNotCompleteTrip(null)} onDone={load} />}
       {viewTrip && <TripDetailsModal trip={viewTrip} onClose={() => setViewTrip(null)} onDone={() => { load(); setViewTrip(null); }} />}
+      {biltyTrip && <BiltyViewModal trip={biltyTrip} onClose={() => setBiltyTrip(null)} />}
+      {podTrip && <PodModal trip={podTrip} onClose={() => setPodTrip(null)} />}
     </Layout>
   );
 }

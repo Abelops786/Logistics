@@ -189,7 +189,17 @@ class _LedgerScreenState extends State<LedgerScreen> {
 
           const SizedBox(height: 8),
           Text(trip.route, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-          Text(trip.containerType.replaceAll('_', ' '), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Row(children: [
+            Text(trip.containerType.replaceAll('_', ' '), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            if (trip.forceCompleted) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
+                child: Text('⚡ Force Completed', style: TextStyle(fontSize: 10, color: Colors.orange.shade800, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ]),
 
           // QUOTED: admin has priced it, agent needs to respond
           if (trip.status == 'quoted' && trip.adminFinalPrice != null)

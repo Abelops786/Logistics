@@ -625,6 +625,21 @@ router.post('/trips/:id/pod', ...isAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/trips/:id/bilty-check — quick check if bilty+POD exist
+router.get('/trips/:id/bilty-check', ...isAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT bilty_number, bilty_no, bilty_file_base64, pod_file_base64, image_base64 FROM bilty_submissions WHERE trip_id=$1',
+      [req.params.id]
+    );
+    const b = rows[0];
+    res.json({
+      hasBilty: !!(b && (b.bilty_number || b.bilty_no || b.bilty_file_base64 || b.image_base64)),
+      hasPod: !!(b && b.pod_file_base64),
+    });
+  } catch (err) { res.status(500).json({ hasBilty: false, hasPod: false }); }
+});
+
 // GET /api/admin/trips/:id/bilty
 router.get('/trips/:id/bilty', ...isAdmin, async (req, res) => {
   try {
@@ -664,15 +679,16 @@ router.post('/trips/:id/notify-bilty', ...isAdmin, async (req, res) => {
 
 // POST /api/admin/trips/:id/complete
 router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
-  const { notes } = req.body;
+  const { notes, force } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE trips SET status = 'completed', completion_notes = $1,
+       force_completed = $3,
        total_amount = admin_final_price + COALESCE(detention_penalty, 0),
        updated_at = NOW()
        WHERE id = $2 AND status IN ('approved', 'not_complete')
        RETURNING *`,
-      [notes || null, req.params.id]
+      [notes || null, req.params.id, force === true]
     );
     if (!rows.length) return res.status(400).json({ message: 'Trip not found or not in approved status' });
 

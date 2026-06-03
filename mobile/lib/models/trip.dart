@@ -13,6 +13,7 @@ class Trip {
   final String? driverPhone;
   final String? paymentType;
   final bool agentRepriced;
+  final bool forceCompleted;
   final String? clientName;
 
   Trip({
@@ -30,6 +31,7 @@ class Trip {
     this.driverPhone,
     this.paymentType,
     this.agentRepriced = false,
+    this.forceCompleted = false,
     this.clientName,
   });
 
@@ -56,6 +58,7 @@ class Trip {
       driverPhone: j['driver_phone'],
       paymentType: j['payment_type'],
       agentRepriced: j['agent_repriced'] == true,
+      forceCompleted: j['force_completed'] == true,
       clientName: j['client_name'],
     );
   }
