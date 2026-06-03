@@ -599,8 +599,8 @@ router.post('/trips/:id/pod', ...isAdmin, async (req, res) => {
   const { pod_file_base64, pod_file_type } = req.body;
   if (!pod_file_base64) return res.status(400).json({ message: 'pod_file_base64 required' });
   try {
-    const tripRow = await pool.query("SELECT * FROM trips WHERE id=$1 AND status='completed'", [req.params.id]);
-    if (!tripRow.rows.length) return res.status(404).json({ message: 'Trip not found or not completed' });
+    const tripRow = await pool.query("SELECT * FROM trips WHERE id=$1 AND status IN ('approved','completed')", [req.params.id]);
+    if (!tripRow.rows.length) return res.status(404).json({ message: 'Trip not found or not approved/completed' });
     const trip = tripRow.rows[0];
 
     await pool.query(

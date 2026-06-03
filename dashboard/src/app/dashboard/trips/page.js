@@ -595,7 +595,7 @@ function NotCompleteModal({ trip, onClose, onDone }) {
 }
 
 // ── POD Upload Section (inside TripDetailsModal for completed trips) ──────────
-function PodUploadSection({ tripId, bilty, onUploaded }) {
+function PodUploadSection({ tripId, bilty, onUploaded, compact = false }) {
   const [uploading, setUploading] = useState(false);
 
   async function handleFile(e) {
@@ -739,51 +739,106 @@ function TripDetailsModal({ trip, onClose, onDone }) {
           {trip.not_complete_reason && <Row label="Not Complete Reason" value={trip.not_complete_reason} color="text-red-600" />}
         </div>
 
-        {/* Bilty Section */}
-        {trip.status === 'approved' && (
-          <div className="mt-4 border border-blue-200 rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-b border-blue-200">
-              <p className="text-sm font-semibold text-blue-800">📄 Bilty</p>
-              {!biltyLoading && !bilty && (
+        {/* ── Bilty & POD Section — visible for approved + completed ── */}
+        {['approved','completed','not_complete'].includes(trip.status) && (
+          <div className="mt-4 space-y-3">
+
+            {/* Bilty Card */}
+            <div className="border border-blue-200 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-b border-blue-200">
+                <p className="text-sm font-semibold text-blue-800">📄 Bilty</p>
                 <button onClick={sendBiltyReminder} disabled={notifying}
                   className="px-3 py-1 bg-orange-500 text-white text-xs rounded font-medium hover:bg-orange-600 disabled:opacity-50">
                   {notifying ? 'Sending...' : '🔔 Notify Agent'}
                 </button>
+              </div>
+              {biltyLoading ? (
+                <div className="p-4 text-center text-gray-400 text-sm">Loading...</div>
+              ) : !bilty ? (
+                <div className="p-4 text-center text-gray-400 text-sm">No bilty uploaded by agent yet.</div>
+              ) : (
+                <div className="p-4">
+                  <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                    <div><p className="text-xs text-gray-400">Job No</p><p className="font-bold text-blue-600">#{String(bilty.job_number).padStart(3,'0')}</p></div>
+                    <div><p className="text-xs text-gray-400">Bilty No</p><p className="font-bold text-gray-800">{bilty.bilty_number || bilty.bilty_no || '—'}</p></div>
+                    {bilty.customer_name && <div><p className="text-xs text-gray-400">Customer</p><p className="font-medium">{bilty.customer_name}</p></div>}
+                    {bilty.booking_date && <div><p className="text-xs text-gray-400">Booking Date</p><p className="font-medium">{bilty.booking_date?.slice(0,10)}</p></div>}
+                    <div><p className="text-xs text-gray-400">Category</p><p className="font-medium capitalize">{bilty.category?.replace('_',' ') || '—'}</p></div>
+                    <div><p className="text-xs text-gray-400">Invoice</p><p className="font-medium">{bilty.invoice_type === 'gst' ? 'GST' : 'Non-GST'}</p></div>
+                    {bilty.vehicle_no && <div><p className="text-xs text-gray-400">Vehicle</p><p className="font-medium">{bilty.vehicle_no}</p></div>}
+                    {bilty.container_size && <div><p className="text-xs text-gray-400">Container</p><p className="font-medium">{bilty.container_size}</p></div>}
+                    {bilty.origin && <div><p className="text-xs text-gray-400">Origin</p><p className="font-medium">{bilty.origin}</p></div>}
+                    {bilty.destination && <div className="col-span-2"><p className="text-xs text-gray-400">Destination</p><p className="font-medium">{bilty.destination}</p></div>}
+                    <div><p className="text-xs text-gray-400">Gross Weight</p><p className="font-medium">{bilty.gross_weight_mt ? `${bilty.gross_weight_mt} MT` : '—'}</p></div>
+                    <div><p className="text-xs text-gray-400">Freight</p><p className="font-medium">{bilty.freight ? `Rs. ${parseFloat(bilty.freight).toLocaleString()}` : '—'}</p></div>
+                    <div><p className="text-xs text-gray-400">POD Required</p><p className="font-medium capitalize">{bilty.pod_required || '—'}</p></div>
+                    <div><p className="text-xs text-gray-400">Credit Term</p><p className="font-medium">{bilty.credit_term_days ? `${bilty.credit_term_days} Days` : '—'}</p></div>
+                    <div className="col-span-2"><p className="text-xs text-gray-400">Transit Loss</p><p className="font-medium">{bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : '—'}</p></div>
+                  </div>
+                  {/* Bilty Document */}
+                  {(bilty.bilty_file_base64 || bilty.image_base64) && (
+                    <div className="border-t border-gray-100 pt-3">
+                      <p className="text-xs text-gray-500 font-medium mb-2">📎 Bilty Document</p>
+                      {bilty.bilty_file_type === 'pdf' ? (
+                        <a href={bilty.bilty_file_base64} download="Bilty.pdf"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
+                          📥 Download Bilty PDF
+                        </a>
+                      ) : (
+                        <div>
+                          <img src={bilty.bilty_file_base64 || bilty.image_base64} alt="Bilty" className="w-full rounded border border-gray-200 max-h-56 object-contain mb-2" />
+                          <a href={bilty.bilty_file_base64 || bilty.image_base64} download="Bilty.jpg"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+                            📥 Download Image
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-            {biltyLoading ? (
-              <div className="p-4 text-center text-gray-400 text-sm">Loading...</div>
-            ) : !bilty ? (
-              <div className="p-4 text-center text-gray-400 text-sm">No bilty uploaded yet.</div>
-            ) : (
-              <div className="p-4 space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><p className="text-xs text-gray-400">Job No</p><p className="font-bold text-blue-600">#{String(bilty.job_number).padStart(3,'0')}</p></div>
-                  <div><p className="text-xs text-gray-400">Bilty Number</p><p className="font-bold text-gray-800">{bilty.bilty_number || bilty.bilty_no || '—'}</p></div>
-                  <div><p className="text-xs text-gray-400">Category</p><p className="font-medium capitalize">{bilty.category?.replace('_',' ') || '—'}</p></div>
-                  <div><p className="text-xs text-gray-400">Invoice</p><p className="font-medium">{bilty.invoice_type === 'gst' ? 'GST' : bilty.invoice_type === 'non_gst' ? 'Non-GST' : '—'}</p></div>
-                  <div><p className="text-xs text-gray-400">Gross Weight</p><p className="font-medium">{bilty.gross_weight_mt ? `${bilty.gross_weight_mt} MT` : '—'}</p></div>
-                  <div><p className="text-xs text-gray-400">Freight</p><p className="font-medium">{bilty.freight ? `Rs. ${parseFloat(bilty.freight).toLocaleString()}` : '—'}</p></div>
-                  <div><p className="text-xs text-gray-400">POD Required</p><p className="font-medium capitalize">{bilty.pod_required || '—'}</p></div>
-                  <div><p className="text-xs text-gray-400">Credit Term</p><p className="font-medium">{bilty.credit_term_days ? `${bilty.credit_term_days} Days` : '—'}</p></div>
-                  <div className="col-span-2"><p className="text-xs text-gray-400">Transit Loss</p><p className="font-medium">{bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : '—'}</p></div>
-                </div>
-                {/* Bilty document */}
-                {(bilty.bilty_file_base64 || bilty.image_base64) && (
-                  <div className="mt-3">
-                    <p className="text-xs text-gray-400 mb-2">📄 Bilty Document</p>
-                    {(bilty.bilty_file_type === 'pdf') ? (
-                      <a href={bilty.bilty_file_base64} download="Bilty.pdf"
-                        className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 hover:bg-red-100 w-fit">
-                        📥 Download Bilty PDF
-                      </a>
-                    ) : (
-                      <img src={bilty.bilty_file_base64 || bilty.image_base64} alt="Bilty" className="w-full rounded-lg border border-gray-200 max-h-48 object-contain" />
-                    )}
-                  </div>
-                )}
+
+            {/* POD Card */}
+            <div className="border border-green-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-green-50 border-b border-green-200">
+                <p className="text-sm font-semibold text-green-800">✅ Proof of Delivery (POD)</p>
               </div>
-            )}
+              {biltyLoading ? (
+                <div className="p-4 text-center text-gray-400 text-sm">Loading...</div>
+              ) : bilty?.pod_file_base64 ? (
+                <div className="p-4">
+                  {bilty.pod_file_type === 'pdf' ? (
+                    <a href={bilty.pod_file_base64} download="POD.pdf"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700">
+                      📥 Download POD PDF
+                    </a>
+                  ) : (
+                    <div>
+                      <img src={bilty.pod_file_base64} alt="POD" className="w-full rounded border border-gray-200 max-h-56 object-contain mb-2" />
+                      <a href={bilty.pod_file_base64} download="POD.jpg"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+                        📥 Download Image
+                      </a>
+                    </div>
+                  )}
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    <p className="text-xs text-gray-400 mb-1">Upload new POD to replace:</p>
+                    <PodUploadSection tripId={trip.id} bilty={bilty} onUploaded={() => {
+                      api.get(`/api/admin/trips/${trip.id}/bilty`).then(r => setBilty(r.data.bilty)).catch(()=>{});
+                    }} compact />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4">
+                  <p className="text-sm text-gray-500 mb-3">No POD uploaded yet. Upload when proof of delivery is received.</p>
+                  <PodUploadSection tripId={trip.id} bilty={bilty} onUploaded={() => {
+                    api.get(`/api/admin/trips/${trip.id}/bilty`).then(r => setBilty(r.data.bilty)).catch(()=>{});
+                  }} />
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
@@ -806,10 +861,9 @@ function TripDetailsModal({ trip, onClose, onDone }) {
             </form>
           </div>
         ) : trip.status === 'completed' ? (
-          <PodUploadSection tripId={trip.id} bilty={bilty} onUploaded={() => {
-            api.get(`/api/admin/trips/${trip.id}/bilty`).then(r => setBilty(r.data.bilty)).catch(()=>{});
-          }} />
-
+          <div className="mt-2 p-3 bg-blue-50 rounded text-xs text-blue-700 text-center border border-blue-200">
+            ✓ Trip <strong>Completed</strong>
+          </div>
         ) : trip.status === 'not_complete' ? (
           <div className="mt-2 p-3 bg-orange-50 rounded text-xs text-orange-700 text-center border border-orange-200">
             ✕ Marked <strong>Not Complete</strong>. Use <strong>Re-Assign</strong> to update pricing, then <strong>Complete</strong>.
