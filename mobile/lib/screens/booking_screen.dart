@@ -41,6 +41,11 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
+    if (_clientNameCtrl.text.trim().isEmpty || _clientPhoneCtrl.text.trim().isEmpty) {
+      _showErr('Client name and contact number are required.');
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       final body = {
@@ -48,8 +53,8 @@ class _BookingScreenState extends State<BookingScreen> {
         'dropoff_locations': drops,
         'container_type': _containerType,
         'is_double': _isDouble,
-        if (_clientNameCtrl.text.isNotEmpty) 'client_name': _clientNameCtrl.text.trim(),
-        if (_clientPhoneCtrl.text.isNotEmpty) 'client_phone': _clientPhoneCtrl.text.trim(),
+        'client_name': _clientNameCtrl.text.trim(),
+        'client_phone': _clientPhoneCtrl.text.trim(),
         if (_showClient2 && _client2NameCtrl.text.isNotEmpty) 'client_name_2': _client2NameCtrl.text.trim(),
         if (_showClient2 && _client2PhoneCtrl.text.isNotEmpty) 'client_phone_2': _client2PhoneCtrl.text.trim(),
         if (_weightCtrl.text.isNotEmpty) 'weight_ton': double.tryParse(_weightCtrl.text),
@@ -232,17 +237,17 @@ class _BookingScreenState extends State<BookingScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Client 1
-        const Text('Client 1', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
+        const Text('Client 1 *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
         const SizedBox(height: 8),
         TextField(
           controller: _clientNameCtrl,
-          decoration: InputDecoration(labelText: 'Client Name', hintText: 'e.g. Ali Hassan', filled: true, fillColor: Colors.grey.shade50, border: border, enabledBorder: border),
+          decoration: InputDecoration(labelText: 'Client Name *', hintText: 'e.g. Ali Hassan', filled: true, fillColor: Colors.grey.shade50, border: border, enabledBorder: border),
         ),
         const SizedBox(height: 10),
         TextField(
           controller: _clientPhoneCtrl,
           keyboardType: TextInputType.phone,
-          decoration: InputDecoration(labelText: 'Client Contact No', hintText: '03xxxxxxxxx', filled: true, fillColor: Colors.grey.shade50, border: border, enabledBorder: border),
+          decoration: InputDecoration(labelText: 'Client Contact No *', hintText: '03xxxxxxxxx', filled: true, fillColor: Colors.grey.shade50, border: border, enabledBorder: border),
         ),
         const SizedBox(height: 12),
 

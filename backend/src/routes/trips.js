@@ -16,6 +16,10 @@ router.post('/request', authenticate, requireRole('agent'), async (req, res) => 
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
+  if (!client_name?.trim() || !client_phone?.trim()) {
+    return res.status(400).json({ message: 'Client name and contact number are required' });
+  }
+
   try {
     const { rows } = await pool.query(
       `INSERT INTO trips (agent_id, pickup_location, dropoff_locations, container_type, agent_requested_price,
