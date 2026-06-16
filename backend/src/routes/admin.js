@@ -653,6 +653,24 @@ router.get('/trips/:id/bilty', ...isAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/trips/:id/bilty/admin-upload — admin uploads bilty document
+router.post('/trips/:id/bilty/admin-upload', ...isAdmin, async (req, res) => {
+  const { bilty_file_base64, bilty_file_type } = req.body;
+  if (!bilty_file_base64) return res.status(400).json({ message: 'bilty_file_base64 required' });
+  try {
+    await pool.query(
+      `INSERT INTO bilty_submissions (trip_id, bilty_file_base64, bilty_file_type)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (trip_id) DO UPDATE SET bilty_file_base64=$2, bilty_file_type=$3, updated_at=NOW()`,
+      [req.params.id, bilty_file_base64, bilty_file_type || 'image']
+    );
+    res.json({ message: 'Bilty uploaded successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // POST /api/admin/trips/:id/notify-bilty — remind agent to upload bilty
 router.post('/trips/:id/notify-bilty', ...isAdmin, async (req, res) => {
   try {

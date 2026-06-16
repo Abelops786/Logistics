@@ -250,6 +250,23 @@ class _LedgerScreenState extends State<LedgerScreen> {
               style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w500)),
           ],
 
+          // View Bilty/POD button for approved & completed trips
+          if (trip.status == 'approved' || trip.status == 'completed') ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _showBiltyPodView(context, trip),
+              icon: const Icon(Icons.description_outlined, size: 16),
+              label: const Text('View Bilty / POD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.blue.shade700,
+                side: BorderSide(color: Colors.blue.shade300),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                minimumSize: const Size(double.infinity, 36),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 6),
           Text('Tap to view details', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
         ]),
@@ -428,6 +445,15 @@ class _LedgerScreenState extends State<LedgerScreen> {
       builder: (_) => _TripDetailSheet(trip: trip),
     );
   }
+
+  void _showBiltyPodView(BuildContext context, Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BiltyPodViewSheet(tripId: trip.id, route: trip.route),
+    );
+  }
 }
 
 class _TripDetailSheet extends StatelessWidget {
@@ -518,5 +544,124 @@ class _TripDetailSheet extends StatelessWidget {
         Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
       ]),
     );
+  }
+}
+
+class _BiltyPodViewSheet extends StatefulWidget {
+  final String tripId;
+  final String route;
+  const _BiltyPodViewSheet({required this.tripId, required this.route});
+
+  @override
+  State<_BiltyPodViewSheet> createState() => _BiltyPodViewSheetState();
+}
+
+class _BiltyPodViewSheetState extends State<_BiltyPodViewSheet> {
+  Map<String, dynamic>? _bilty;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await ApiService.get('/api/trips/${widget.tripId}/bilty');
+      setState(() => _bilty = res['bilty']);
+    } catch (_) {}
+    setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.82,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Bilty / POD', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+        ]),
+        Text(widget.route, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        const Divider(height: 20),
+        if (_loading)
+          const Expanded(child: Center(child: CircularProgressIndicator()))
+        else
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Bilty section
+                _sectionTitle('Bilty Document', Icons.description_outlined, Colors.blue.shade700),
+                const SizedBox(height: 8),
+                if (_bilty != null && (_bilty!['bilty_file_base64'] != null || _bilty!['image_base64'] != null))
+                  _docView(
+                    _bilty!['bilty_file_base64'] ?? _bilty!['image_base64'],
+                    _bilty!['bilty_file_type'] ?? 'image',
+                    'Bilty',
+                  )
+                else
+                  _emptyBox('No bilty uploaded yet.'),
+
+                const SizedBox(height: 20),
+
+                // POD section
+                _sectionTitle('Proof of Delivery (POD)', Icons.check_circle_outline, Colors.green.shade700),
+                const SizedBox(height: 8),
+                if (_bilty != null && _bilty!['pod_file_base64'] != null)
+                  _docView(
+                    _bilty!['pod_file_base64'],
+                    _bilty!['pod_file_type'] ?? 'image',
+                    'POD',
+                  )
+                else if (_bilty != null && _bilty!['pod_image_base64'] != null)
+                  _docView(_bilty!['pod_image_base64'], 'image', 'POD')
+                else
+                  _emptyBox('No POD uploaded yet.'),
+              ]),
+            ),
+          ),
+      ]),
+    );
+  }
+
+  Widget _sectionTitle(String title, IconData icon, Color color) => Row(children: [
+    Icon(icon, size: 18, color: color),
+    const SizedBox(width: 6),
+    Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+  ]);
+
+  Widget _emptyBox(String msg) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
+    child: Center(child: Text(msg, style: TextStyle(fontSize: 13, color: Colors.grey.shade400))),
+  );
+
+  Widget _docView(String src, String fileType, String label) {
+    if (fileType == 'pdf') {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
+        child: Row(children: [
+          Icon(Icons.picture_as_pdf, color: Colors.red.shade700, size: 28),
+          const SizedBox(width: 10),
+          Text('$label PDF available', style: TextStyle(fontSize: 13, color: Colors.red.shade700, fontWeight: FontWeight.w500)),
+        ]),
+      );
+    }
+    try {
+      final bytes = base64Decode(src.split(',').last);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(bytes, width: double.infinity, fit: BoxFit.contain),
+      );
+    } catch (_) {
+      return _emptyBox('Could not display document.');
+    }
   }
 }

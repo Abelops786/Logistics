@@ -640,7 +640,7 @@ function NotCompleteModal({ trip, onClose, onDone }) {
 function BiltyViewModal({ trip, onClose }) {
   const [bilty, setBilty] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [notifying, setNotifying] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     api.get(`/api/admin/trips/${trip.id}/bilty`)
@@ -649,10 +649,24 @@ function BiltyViewModal({ trip, onClose }) {
       .finally(() => setLoading(false));
   }, [trip.id]);
 
-  async function notify() {
-    setNotifying(true);
-    try { await api.post(`/api/admin/trips/${trip.id}/notify-bilty`, {}); alert('Notification sent!'); }
-    catch { alert('Failed'); } finally { setNotifying(false); }
+  async function handleUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const fileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+        await api.post(`/api/admin/trips/${trip.id}/bilty/admin-upload`, {
+          bilty_file_base64: reader.result,
+          bilty_file_type: fileType,
+        });
+        const r = await api.get(`/api/admin/trips/${trip.id}/bilty`);
+        setBilty(r.data.bilty);
+      };
+      reader.readAsDataURL(file);
+    } catch { alert('Upload failed'); }
+    finally { setUploading(false); }
   }
 
   return (
@@ -663,64 +677,65 @@ function BiltyViewModal({ trip, onClose }) {
           <button onClick={onClose} className="text-gray-400 text-xl">&times;</button>
         </div>
         <div className="overflow-y-auto flex-1 p-5">
-          {loading ? <div className="text-center text-gray-400 py-8">Loading...</div>
-          : !bilty ? (
-            <div className="text-center py-8">
-              <p className="text-gray-400 mb-4">No bilty uploaded by agent yet.</p>
-              <button onClick={notify} disabled={notifying}
-                className="px-4 py-2 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 disabled:opacity-50">
-                {notifying ? 'Sending...' : '🔔 Notify Agent to Upload Bilty'}
-              </button>
-            </div>
-          ) : (
+          {loading ? <div className="text-center text-gray-400 py-8">Loading...</div> : (
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold text-blue-600">Job #{String(bilty.job_number).padStart(3,'0')}</span>
-                <button onClick={notify} disabled={notifying}
-                  className="px-3 py-1 bg-orange-500 text-white text-xs rounded font-medium hover:bg-orange-600 disabled:opacity-50">
-                  {notifying ? '...' : '🔔 Notify Agent'}
-                </button>
+              {/* Upload button — always shown so admin can upload/replace */}
+              <div>
+                <label className={`inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-medium cursor-pointer text-white ${uploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                  {uploading ? 'Uploading...' : '📤 Upload Bilty'}
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+                </label>
+                <span className="ml-3 text-xs text-gray-400">Image or PDF</span>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
-                  ['Bilty No', bilty.bilty_number || bilty.bilty_no],
-                  ['Booking Date', bilty.booking_date?.slice(0,10)],
-                  ['Customer', bilty.customer_name],
-                  ['Category', bilty.category?.replace('_',' ')],
-                  ['Invoice', bilty.invoice_type === 'gst' ? 'GST' : 'Non-GST'],
-                  ['Vehicle', bilty.vehicle_no],
-                  ['Container', bilty.container_size],
-                  ['Origin', bilty.origin],
-                  ['Destination', bilty.destination],
-                  ['Gross Weight', bilty.gross_weight_mt ? `${bilty.gross_weight_mt} MT` : null],
-                  ['Freight', bilty.freight ? `Rs. ${parseFloat(bilty.freight).toLocaleString()}` : null],
-                  ['POD Required', bilty.pod_required],
-                  ['Credit Term', bilty.credit_term_days ? `${bilty.credit_term_days} Days` : null],
-                  ['Transit Loss', bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : null],
-                ].filter(([,v]) => v).map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-xs text-gray-400">{label}</p>
-                    <p className="font-medium capitalize">{value}</p>
+
+              {/* Existing bilty details */}
+              {bilty ? (
+                <>
+                  {bilty.job_number && (
+                    <p className="text-lg font-bold text-blue-600">Job #{String(bilty.job_number).padStart(3,'0')}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {[
+                      ['Bilty No', bilty.bilty_number || bilty.bilty_no],
+                      ['Booking Date', bilty.booking_date?.slice(0,10)],
+                      ['Customer', bilty.customer_name],
+                      ['Category', bilty.category?.replace('_',' ')],
+                      ['Invoice', bilty.invoice_type === 'gst' ? 'GST' : 'Non-GST'],
+                      ['Gross Weight', bilty.gross_weight_mt ? `${bilty.gross_weight_mt} MT` : null],
+                      ['Freight', bilty.freight ? `Rs. ${parseFloat(bilty.freight).toLocaleString()}` : null],
+                      ['POD Required', bilty.pod_required],
+                      ['Credit Term', bilty.credit_term_days ? `${bilty.credit_term_days} Days` : null],
+                      ['Transit Loss', bilty.transit_loss === 'customer' ? 'At Customer End' : bilty.transit_loss === 'transporter' ? 'At Transporter End' : null],
+                    ].filter(([,v]) => v).map(([label, value]) => (
+                      <div key={label}>
+                        <p className="text-xs text-gray-400">{label}</p>
+                        <p className="font-medium capitalize">{value}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              {(bilty.bilty_file_base64 || bilty.image_base64) && (
-                <div className="border-t pt-3">
-                  <p className="text-xs text-gray-500 font-medium mb-2">Bilty Document</p>
-                  {bilty.bilty_file_type === 'pdf' ? (
-                    <a href={bilty.bilty_file_base64} download="Bilty.pdf"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
-                      📥 Download Bilty PDF
-                    </a>
-                  ) : (
-                    <div>
-                      <img src={bilty.bilty_file_base64 || bilty.image_base64} alt="Bilty" className="w-full rounded border border-gray-200 max-h-64 object-contain mb-2" />
-                      <a href={bilty.bilty_file_base64 || bilty.image_base64} download="Bilty.jpg"
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
-                        📥 Download Image
-                      </a>
+                  {(bilty.bilty_file_base64 || bilty.image_base64) && (
+                    <div className="border-t pt-3">
+                      <p className="text-xs text-gray-500 font-medium mb-2">Bilty Document</p>
+                      {bilty.bilty_file_type === 'pdf' ? (
+                        <a href={bilty.bilty_file_base64} download="Bilty.pdf"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
+                          📥 Download Bilty PDF
+                        </a>
+                      ) : (
+                        <div>
+                          <img src={bilty.bilty_file_base64 || bilty.image_base64} alt="Bilty" className="w-full rounded border border-gray-200 max-h-64 object-contain mb-2" />
+                          <a href={bilty.bilty_file_base64 || bilty.image_base64} download="Bilty.jpg"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+                            📥 Download Image
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )}
+                </>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center text-gray-400 text-sm">
+                  No bilty uploaded yet. Use the button above to upload.
                 </div>
               )}
             </div>
