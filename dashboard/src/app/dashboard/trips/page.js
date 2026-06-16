@@ -393,15 +393,21 @@ function EditTripModal({ trip, vehicles, onClose, onSaved }) {
 }
 
 function AssignModal({ trip, vehicles, onClose, onAssigned }) {
+  const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
+  const assignableVehicles = vehicles.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
+
+  // Pre-select vehicle whose assigned driver matches the agent's chosen driver
+  const preselectedVehicle = trip.driver_id
+    ? assignableVehicles.find((v) => v.assigned_driver_id === trip.driver_id)
+    : null;
+
   const [form, setForm] = useState({
     final_price: trip.agent_requested_price || trip.system_estimated_price || '',
-    vehicle_id: '',
+    vehicle_id: preselectedVehicle?.id || '',
     payment_type: 'bank',
   });
   const [loading, setLoading] = useState(false);
-  const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
 
-  const assignableVehicles = vehicles.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
   const selectedVehicle = assignableVehicles.find((v) => v.id === form.vehicle_id);
 
   async function submit(e) {

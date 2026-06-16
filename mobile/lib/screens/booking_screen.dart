@@ -89,6 +89,11 @@ class _BookingScreenState extends State<BookingScreen> {
       return;
     }
 
+    if (_selectedDriver == null) {
+      _showErr('Please select a driver.');
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       final body = {
@@ -108,6 +113,7 @@ class _BookingScreenState extends State<BookingScreen> {
       };
 
       final res = await ApiService.post('/api/trips/request', body);
+      if (!mounted) return;
       if (res != null && res['trip'] != null) {
         await context.read<AppProvider>().loadLedger();
         _showSuccess('Trip request submitted! Admin will review shortly.');
@@ -355,7 +361,7 @@ class _BookingScreenState extends State<BookingScreen> {
           controller: _driverSearchCtrl,
           onTap: () => setState(() => _showDriverDropdown = true),
           decoration: InputDecoration(
-            labelText: 'Search Driver (optional)',
+            labelText: 'Select Driver *',
             hintText: 'Type to filter...',
             prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
@@ -423,8 +429,8 @@ class _BookingScreenState extends State<BookingScreen> {
         if (_selectedDriver == null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text('Optional — admin can also assign a driver later.',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+            child: Text('Required — please select a driver.',
+                style: TextStyle(fontSize: 11, color: Colors.red.shade400)),
           ),
       ],
     );
