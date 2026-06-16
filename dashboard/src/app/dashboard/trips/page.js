@@ -396,8 +396,10 @@ function AssignModal({ trip, vehicles, onClose, onAssigned }) {
   const drops = Array.isArray(trip.dropoff_locations) ? trip.dropoff_locations : JSON.parse(trip.dropoff_locations || '[]');
   const assignableVehicles = vehicles.filter((v) => !['SYSTEM-50FT', 'SYSTEM-47FT'].includes(v.plate_number));
 
-  // Pre-select vehicle whose assigned driver matches the agent's chosen driver
-  const preselectedVehicle = trip.driver_id
+  // Pre-select vehicle: prefer vehicle_id saved on trip, fall back to matching by driver
+  const preselectedVehicle = trip.vehicle_id
+    ? assignableVehicles.find((v) => v.id === trip.vehicle_id)
+    : trip.driver_id
     ? assignableVehicles.find((v) => v.assigned_driver_id === trip.driver_id)
     : null;
 

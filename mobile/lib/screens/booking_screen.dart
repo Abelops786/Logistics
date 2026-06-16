@@ -45,22 +45,33 @@ class _BookingScreenState extends State<BookingScreen> {
     try {
       final res = await ApiService.get('/api/agent/drivers');
       if (res is List) {
-        setState(() {
-          _drivers = List<Map<String, dynamic>>.from(res);
-          _filteredDrivers = _drivers;
-        });
+        _drivers = List<Map<String, dynamic>>.from(res);
+        _filterDrivers();
       }
     } catch (_) {}
   }
 
   void _filterDrivers() {
     final q = _driverSearchCtrl.text.toLowerCase();
+    final byContainer = _drivers.where((d) => d['container_type'] == _containerType).toList();
     setState(() {
-      _filteredDrivers = _drivers.where((d) =>
-        d['name'].toString().toLowerCase().contains(q) ||
-        (d['phone'] ?? '').toString().contains(q)
-      ).toList();
+      _filteredDrivers = q.isEmpty
+          ? byContainer
+          : byContainer.where((d) =>
+              d['name'].toString().toLowerCase().contains(q) ||
+              (d['phone'] ?? '').toString().contains(q)
+            ).toList();
     });
+  }
+
+  void _onContainerTypeChanged(String type) {
+    setState(() {
+      _containerType = type;
+      _selectedDriver = null;
+      _driverSearchCtrl.clear();
+      _showDriverDropdown = false;
+    });
+    _filterDrivers();
   }
 
   final _containerLabels = {
@@ -104,6 +115,7 @@ class _BookingScreenState extends State<BookingScreen> {
         'client_name': _clientNameCtrl.text.trim(),
         'client_phone': _clientPhoneCtrl.text.trim(),
         if (_selectedDriver != null) 'driver_id': _selectedDriver!['id'],
+        if (_selectedDriver?['vehicle_id'] != null) 'vehicle_id': _selectedDriver!['vehicle_id'],
         if (_showClient2 && _client2NameCtrl.text.isNotEmpty) 'client_name_2': _client2NameCtrl.text.trim(),
         if (_showClient2 && _client2PhoneCtrl.text.isNotEmpty) 'client_phone_2': _client2PhoneCtrl.text.trim(),
         if (_weightCtrl.text.isNotEmpty) 'weight_ton': double.tryParse(_weightCtrl.text),
@@ -145,9 +157,10 @@ class _BookingScreenState extends State<BookingScreen> {
       _isDouble = false;
       _showClient2 = false;
       _selectedDriver = null;
-      _filteredDrivers = _drivers;
+      _showDriverDropdown = false;
       _formKey++;
     });
+    _filterDrivers();
   }
 
   void _showErr(String msg) => ScaffoldMessenger.of(context).showSnackBar(
@@ -265,7 +278,7 @@ class _BookingScreenState extends State<BookingScreen> {
       children: _containerLabels.entries.map((entry) {
         final selected = _containerType == entry.key;
         return GestureDetector(
-          onTap: () => setState(() => _containerType = entry.key),
+          onTap: () => _onContainerTypeChanged(entry.key),
           child: Container(
             margin: const EdgeInsets.only(bottom: 10),
             padding: const EdgeInsets.all(14),

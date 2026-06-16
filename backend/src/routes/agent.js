@@ -210,11 +210,15 @@ router.get('/vehicles', authenticate, requireRole('agent'), async (req, res) => 
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 });
 
-// GET /api/agent/drivers — list drivers for booking dropdown
+// GET /api/agent/drivers — list drivers with their assigned vehicle info
 router.get('/drivers', authenticate, requireRole('agent'), async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, phone FROM drivers ORDER BY name ASC`
+      `SELECT d.id, d.name, d.phone,
+              v.id AS vehicle_id, v.plate_number, v.container_type
+       FROM drivers d
+       LEFT JOIN vehicles v ON v.assigned_driver_id = d.id
+       ORDER BY d.name ASC`
     );
     res.json(rows);
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
