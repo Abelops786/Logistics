@@ -646,11 +646,20 @@ class _BiltyPodViewSheetState extends State<_BiltyPodViewSheet> {
     if (fileType == 'pdf') {
       return Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
+        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.blue.shade200)),
         child: Row(children: [
-          Icon(Icons.picture_as_pdf, color: Colors.red.shade700, size: 28),
-          const SizedBox(width: 10),
-          Text('$label PDF available', style: TextStyle(fontSize: 13, color: Colors.red.shade700, fontWeight: FontWeight.w500)),
+          Icon(Icons.picture_as_pdf, color: Colors.red.shade600, size: 32),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$label PDF', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text('Uploaded by admin', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          ])),
+          TextButton(
+            onPressed: () => _openBase64(src),
+            style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
+            child: const Text('View', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
         ]),
       );
     }
@@ -663,5 +672,37 @@ class _BiltyPodViewSheetState extends State<_BiltyPodViewSheet> {
     } catch (_) {
       return _emptyBox('Could not display document.');
     }
+  }
+
+  void _openBase64(String base64Src) {
+    // Show image/PDF in a full-screen dialog
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(children: [
+          Center(
+            child: Builder(builder: (context) {
+              try {
+                final bytes = base64Decode(base64Src.split(',').last);
+                return InteractiveViewer(
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                );
+              } catch (_) {
+                return const Text('Cannot display document', style: TextStyle(color: Colors.white));
+              }
+            }),
+          ),
+          Positioned(
+            top: 40, right: 16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 }

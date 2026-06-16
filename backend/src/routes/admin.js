@@ -695,6 +695,28 @@ router.post('/trips/:id/notify-bilty', ...isAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/admin/trips/:id/bilty/file — remove bilty document only
+router.delete('/trips/:id/bilty/file', ...isAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE bilty_submissions SET bilty_file_base64=NULL, bilty_file_type=NULL, updated_at=NOW() WHERE trip_id=$1`,
+      [req.params.id]
+    );
+    res.json({ message: 'Bilty document removed' });
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
+// DELETE /api/admin/trips/:id/pod/file — remove POD document only
+router.delete('/trips/:id/pod/file', ...isAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE bilty_submissions SET pod_file_base64=NULL, pod_file_type=NULL, updated_at=NOW() WHERE trip_id=$1`,
+      [req.params.id]
+    );
+    res.json({ message: 'POD document removed' });
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
 // POST /api/admin/trips/:id/complete
 router.post('/trips/:id/complete', ...isAdmin, async (req, res) => {
   const { notes, force } = req.body;

@@ -990,10 +990,6 @@ function TripDetailsModal({ trip, onClose, onDone }) {
             <div className="border border-blue-200 rounded-lg overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border-b border-blue-200">
                 <p className="text-sm font-semibold text-blue-800">📄 Bilty</p>
-                <button onClick={sendBiltyReminder} disabled={notifying}
-                  className="px-3 py-1 bg-orange-500 text-white text-xs rounded font-medium hover:bg-orange-600 disabled:opacity-50">
-                  {notifying ? 'Sending...' : '🔔 Notify Agent'}
-                </button>
               </div>
               {biltyLoading ? (
                 <div className="p-4 text-center text-gray-400 text-sm">Loading...</div>
@@ -1023,17 +1019,25 @@ function TripDetailsModal({ trip, onClose, onDone }) {
                     <div className="border-t border-gray-100 pt-3">
                       <p className="text-xs text-gray-500 font-medium mb-2">📎 Bilty Document</p>
                       {bilty.bilty_file_type === 'pdf' ? (
-                        <a href={bilty.bilty_file_base64} download="Bilty.pdf"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
-                          📥 Download Bilty PDF
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a href={bilty.bilty_file_base64} download="Bilty.pdf"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700">
+                            📥 Download Bilty PDF
+                          </a>
+                          <button onClick={async () => { if (!confirm('Remove bilty document?')) return; await api.delete(`/api/admin/trips/${trip.id}/bilty/file`); const r = await api.get(`/api/admin/trips/${trip.id}/bilty`); setBilty(r.data.bilty); }}
+                            className="px-3 py-2 bg-red-100 text-red-600 text-xs rounded font-medium hover:bg-red-200">🗑 Remove</button>
+                        </div>
                       ) : (
                         <div>
                           <img src={bilty.bilty_file_base64 || bilty.image_base64} alt="Bilty" className="w-full rounded border border-gray-200 max-h-56 object-contain mb-2" />
-                          <a href={bilty.bilty_file_base64 || bilty.image_base64} download="Bilty.jpg"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
-                            📥 Download Image
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a href={bilty.bilty_file_base64 || bilty.image_base64} download="Bilty.jpg"
+                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+                              📥 Download Image
+                            </a>
+                            <button onClick={async () => { if (!confirm('Remove bilty document?')) return; await api.delete(`/api/admin/trips/${trip.id}/bilty/file`); const r = await api.get(`/api/admin/trips/${trip.id}/bilty`); setBilty(r.data.bilty); }}
+                              className="px-3 py-1.5 bg-red-100 text-red-600 text-xs rounded font-medium hover:bg-red-200">🗑 Remove</button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1052,17 +1056,25 @@ function TripDetailsModal({ trip, onClose, onDone }) {
               ) : bilty?.pod_file_base64 ? (
                 <div className="p-4">
                   {bilty.pod_file_type === 'pdf' ? (
-                    <a href={bilty.pod_file_base64} download="POD.pdf"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700">
-                      📥 Download POD PDF
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a href={bilty.pod_file_base64} download="POD.pdf"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded font-medium hover:bg-green-700">
+                        📥 Download POD PDF
+                      </a>
+                      <button onClick={async () => { if (!confirm('Remove POD document?')) return; await api.delete(`/api/admin/trips/${trip.id}/pod/file`); const r = await api.get(`/api/admin/trips/${trip.id}/bilty`); setBilty(r.data.bilty); }}
+                        className="px-3 py-2 bg-red-100 text-red-600 text-xs rounded font-medium hover:bg-red-200">🗑 Remove</button>
+                    </div>
                   ) : (
                     <div>
                       <img src={bilty.pod_file_base64} alt="POD" className="w-full rounded border border-gray-200 max-h-56 object-contain mb-2" />
-                      <a href={bilty.pod_file_base64} download="POD.jpg"
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
-                        📥 Download Image
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <a href={bilty.pod_file_base64} download="POD.jpg"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200">
+                          📥 Download Image
+                        </a>
+                        <button onClick={async () => { if (!confirm('Remove POD document?')) return; await api.delete(`/api/admin/trips/${trip.id}/pod/file`); const r = await api.get(`/api/admin/trips/${trip.id}/bilty`); setBilty(r.data.bilty); }}
+                          className="px-3 py-1.5 bg-red-100 text-red-600 text-xs rounded font-medium hover:bg-red-200">🗑 Remove</button>
+                      </div>
                     </div>
                   )}
                   <div className="mt-3 border-t border-gray-100 pt-3">
