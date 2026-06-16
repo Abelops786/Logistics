@@ -350,38 +350,13 @@ class _BookingScreenState extends State<BookingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Selected driver chip
-        if (_selectedDriver != null)
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green.shade300),
-            ),
-            child: Row(children: [
-              Icon(Icons.person, size: 18, color: Colors.green.shade700),
-              const SizedBox(width: 8),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(_selectedDriver!['name'], style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade800, fontSize: 13)),
-                if (_selectedDriver!['phone'] != null)
-                  Text(_selectedDriver!['phone'], style: TextStyle(fontSize: 11, color: Colors.green.shade600)),
-              ])),
-              GestureDetector(
-                onTap: () => setState(() { _selectedDriver = null; _driverSearchCtrl.clear(); _filteredDrivers = _drivers; }),
-                child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
-              ),
-            ]),
-          ),
-
         // Search field
         TextField(
           controller: _driverSearchCtrl,
           onTap: () => setState(() => _showDriverDropdown = true),
           decoration: InputDecoration(
-            labelText: _selectedDriver == null ? 'Search Driver (optional)' : 'Search another driver',
-            hintText: 'Type driver name or phone...',
+            labelText: 'Search Driver (optional)',
+            hintText: 'Type to filter...',
             prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
             fillColor: Colors.grey.shade50,
@@ -392,15 +367,15 @@ class _BookingScreenState extends State<BookingScreen> {
                     _driverSearchCtrl.clear();
                     setState(() => _filteredDrivers = _drivers);
                   })
-                : null,
+                : const Icon(Icons.arrow_drop_down),
           ),
         ),
 
-        // Dropdown list
-        if (_showDriverDropdown && _driverSearchCtrl.text.isNotEmpty) ...[
+        // Dropdown — always visible when tapped, shows all drivers, filters on type
+        if (_showDriverDropdown) ...[
           const SizedBox(height: 4),
           Container(
-            constraints: const BoxConstraints(maxHeight: 200),
+            constraints: const BoxConstraints(maxHeight: 220),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
@@ -418,18 +393,25 @@ class _BookingScreenState extends State<BookingScreen> {
                     separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100),
                     itemBuilder: (context, i) {
                       final d = _filteredDrivers[i];
+                      final isSelected = _selectedDriver?['id'] == d['id'];
                       return ListTile(
                         dense: true,
-                        leading: CircleAvatar(radius: 16, backgroundColor: Colors.blue.shade100,
-                          child: Text(d['name'][0].toUpperCase(), style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.bold))),
-                        title: Text(d['name'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                        selected: isSelected,
+                        selectedTileColor: Colors.blue.shade50,
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: isSelected ? Colors.blue.shade600 : Colors.blue.shade100,
+                          child: Text(d['name'][0].toUpperCase(),
+                            style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                        ),
+                        title: Text(d['name'], style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isSelected ? Colors.blue.shade700 : Colors.black87)),
                         subtitle: d['phone'] != null ? Text(d['phone'], style: const TextStyle(fontSize: 11)) : null,
+                        trailing: isSelected ? Icon(Icons.check_circle, color: Colors.blue.shade600, size: 18) : null,
                         onTap: () {
                           setState(() {
-                            _selectedDriver = d;
+                            _selectedDriver = isSelected ? null : d;
                             _showDriverDropdown = false;
-                            _driverSearchCtrl.clear();
-                            _filteredDrivers = _drivers;
+                            _driverSearchCtrl.text = isSelected ? '' : d['name'];
                           });
                         },
                       );

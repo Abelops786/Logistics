@@ -205,49 +205,6 @@ class _LedgerScreenState extends State<LedgerScreen> {
           if (trip.status == 'quoted' && trip.adminFinalPrice != null)
             _quotedActionCard(context, trip, provider),
 
-          // APPROVED: Bilty + POD upload buttons
-          if (trip.status == 'approved') ...[
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: OutlinedButton.icon(
-                onPressed: () async {
-                  final result = await Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => BiltyUploadScreen(trip: trip)));
-                  if (result == true) provider.loadLedger();
-                },
-                icon: const Icon(Icons.description_outlined, size: 16),
-                label: const Text('Bilty', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue.shade700,
-                  side: BorderSide(color: Colors.blue.shade300),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                ),
-              )),
-              const SizedBox(width: 8),
-              Expanded(child: _quickUploadBtn(
-                context, trip, provider,
-                label: 'POD',
-                icon: Icons.check_circle_outline,
-                color: Colors.green.shade700,
-                endpoint: '/api/trips/${trip.id}/bilty/pod',
-              )),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: () async {
-                  final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => BiltyScreen(trip: trip)));
-                  if (result == true) provider.loadLedger();
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.grey.shade600,
-                  side: BorderSide(color: Colors.grey.shade300),
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                ),
-                child: const Icon(Icons.more_horiz, size: 20),
-              ),
-            ]),
-          ],
 
           // APPROVED: show final price + vehicle/driver
           if (trip.status == 'approved' && trip.adminFinalPrice != null) ...[
