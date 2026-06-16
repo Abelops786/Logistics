@@ -1,12 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/trip.dart';
 import '../services/api_service.dart';
-import 'bilty_screen.dart';
-import 'bilty_upload_screen.dart';
 
 class LedgerScreen extends StatefulWidget {
   const LedgerScreen({super.key});
@@ -131,9 +131,9 @@ class _LedgerScreenState extends State<LedgerScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(children: [
         Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
@@ -181,7 +181,7 @@ class _LedgerScreenState extends State<LedgerScreen> {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
               child: Text(trip.status.toUpperCase(), style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700)),
             ),
             Text(trip.createdAt.substring(0, 10), style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -270,40 +270,6 @@ class _LedgerScreenState extends State<LedgerScreen> {
           const SizedBox(height: 6),
           Text('Tap to view details', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
         ]),
-      ),
-    );
-  }
-
-  Widget _quickUploadBtn(BuildContext context, Trip trip, AppProvider provider,
-      {required String label, required IconData icon, required Color color, required String endpoint}) {
-    return OutlinedButton.icon(
-      onPressed: () async {
-        final picker = ImagePicker();
-        final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-        if (picked == null) return;
-        try {
-          final bytes = await picked.readAsBytes();
-          final base64Str = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-          await ApiService.post(endpoint, {'image_base64': base64Str});
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('$label uploaded!'),
-              backgroundColor: color,
-            ));
-          }
-        } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red.shade700));
-          }
-        }
-      },
-      icon: Icon(icon, size: 16),
-      label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: color,
-        side: BorderSide(color: color.withOpacity(0.5)),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
     );
   }
@@ -656,9 +622,9 @@ class _BiltyPodViewSheetState extends State<_BiltyPodViewSheet> {
             Text('Uploaded by admin', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
           ])),
           TextButton(
-            onPressed: () => _openBase64(src),
+            onPressed: () => _openBase64(src, isPdf: true),
             style: TextButton.styleFrom(foregroundColor: Colors.blue.shade700),
-            child: const Text('View', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: const Text('Open', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ]),
       );
@@ -674,35 +640,47 @@ class _BiltyPodViewSheetState extends State<_BiltyPodViewSheet> {
     }
   }
 
-  void _openBase64(String base64Src) {
-    // Show image/PDF in a full-screen dialog
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(children: [
-          Center(
-            child: Builder(builder: (context) {
-              try {
-                final bytes = base64Decode(base64Src.split(',').last);
-                return InteractiveViewer(
-                  child: Image.memory(bytes, fit: BoxFit.contain),
-                );
-              } catch (_) {
-                return const Text('Cannot display document', style: TextStyle(color: Colors.white));
-              }
-            }),
+  Future<void> _openBase64(String base64Src, {bool isPdf = false}) async {
+    try {
+      final bytes = base64Decode(base64Src.split(',').last);
+      if (isPdf) {
+        // Save to temp file and open with device PDF viewer
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/document_${DateTime.now().millisecondsSinceEpoch}.pdf');
+        await file.writeAsBytes(bytes);
+        final result = await OpenFile.open(file.path);
+        if (result.type != ResultType.done && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No PDF viewer found. Please install one from Play Store.'), backgroundColor: Colors.red),
+          );
+        }
+      } else {
+        // Show image full-screen
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => Dialog(
+            backgroundColor: Colors.black,
+            insetPadding: EdgeInsets.zero,
+            child: Stack(children: [
+              Center(child: InteractiveViewer(child: Image.memory(bytes, fit: BoxFit.contain))),
+              Positioned(
+                top: 40, right: 16,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ),
+            ]),
           ),
-          Positioned(
-            top: 40, right: 16,
-            child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 28),
-              onPressed: () => Navigator.pop(ctx),
-            ),
-          ),
-        ]),
-      ),
-    );
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open document.'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }
