@@ -154,12 +154,16 @@ router.post('/:id/bilty/pod', authenticate, requireRole('agent'), async (req, re
   } catch (err) { console.error(err); res.status(500).json({ message: 'Server error' }); }
 });
 
-// GET /api/trips/:id/bilty — agent views own bilty
+// GET /api/trips/:id/bilty — agent views bilty/POD for their trip
 router.get('/:id/bilty', authenticate, requireRole('agent'), async (req, res) => {
   try {
+    // Verify the trip belongs to this agent
+    const tripCheck = await pool.query('SELECT id FROM trips WHERE id=$1 AND agent_id=$2', [req.params.id, req.user.id]);
+    if (!tripCheck.rows.length) return res.status(403).json({ message: 'Forbidden' });
+
     const { rows } = await pool.query(
-      'SELECT * FROM bilty_submissions WHERE trip_id=$1 AND agent_id=$2',
-      [req.params.id, req.user.id]
+      'SELECT * FROM bilty_submissions WHERE trip_id=$1',
+      [req.params.id]
     );
     res.json({ bilty: rows[0] || null });
   } catch (err) {
