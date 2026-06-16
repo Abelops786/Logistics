@@ -210,4 +210,14 @@ router.get('/vehicles', authenticate, requireRole('agent'), async (req, res) => 
   } catch (err) { res.status(500).json({ message: 'Server error' }); }
 });
 
+// GET /api/agent/drivers — list drivers for booking dropdown
+router.get('/drivers', authenticate, requireRole('agent'), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, phone FROM drivers ORDER BY name ASC`
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: 'Server error' }); }
+});
+
 module.exports = router;

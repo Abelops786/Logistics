@@ -27,10 +27,53 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _submitting = false;
   int _formKey = 0;
 
+  // Driver selection
+  List<Map<String, dynamic>> _drivers = [];
+  Map<String, dynamic>? _selectedDriver;
+  final _driverSearchCtrl = TextEditingController();
+  bool _showDriverDropdown = false;
+  List<Map<String, dynamic>> _filteredDrivers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDrivers();
+    _driverSearchCtrl.addListener(_filterDrivers);
+  }
+
+  Future<void> _loadDrivers() async {
+    try {
+      final res = await ApiService.get('/api/agent/drivers');
+      if (res is List) {
+        setState(() {
+          _drivers = List<Map<String, dynamic>>.from(res);
+          _filteredDrivers = _drivers;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _filterDrivers() {
+    final q = _driverSearchCtrl.text.toLowerCase();
+    setState(() {
+      _filteredDrivers = _drivers.where((d) =>
+        d['name'].toString().toLowerCase().contains(q) ||
+        (d['phone'] ?? '').toString().contains(q)
+      ).toList();
+    });
+  }
+
   final _containerLabels = {
     '50ft_22_wheeler': '50ft 14-Wheeler Container',
     '47ft_22_wheeler_jumbo': '47ft 14-Wheeler Jumbo Container',
   };
+
+  @override
+  void dispose() {
+    _driverSearchCtrl.removeListener(_filterDrivers);
+    _driverSearchCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _submitRequest() async {
     final pickup = _pickupLocation.trim();
@@ -55,6 +98,7 @@ class _BookingScreenState extends State<BookingScreen> {
         'is_double': _isDouble,
         'client_name': _clientNameCtrl.text.trim(),
         'client_phone': _clientPhoneCtrl.text.trim(),
+        if (_selectedDriver != null) 'driver_id': _selectedDriver!['id'],
         if (_showClient2 && _client2NameCtrl.text.isNotEmpty) 'client_name_2': _client2NameCtrl.text.trim(),
         if (_showClient2 && _client2PhoneCtrl.text.isNotEmpty) 'client_phone_2': _client2PhoneCtrl.text.trim(),
         if (_weightCtrl.text.isNotEmpty) 'weight_ton': double.tryParse(_weightCtrl.text),
@@ -88,11 +132,14 @@ class _BookingScreenState extends State<BookingScreen> {
     _client2PhoneCtrl.clear();
     _weightCtrl.clear();
     _cargoCtrl.clear();
+    _driverSearchCtrl.clear();
     setState(() {
       _pickupLocation = '';
       _counterOffer = false;
       _isDouble = false;
       _showClient2 = false;
+      _selectedDriver = null;
+      _filteredDrivers = _drivers;
       _formKey++;
     });
   }
@@ -123,6 +170,8 @@ class _BookingScreenState extends State<BookingScreen> {
             _section('Container Type', _buildVehicleSection()),
             const SizedBox(height: 16),
             _section('Client Details', _buildClientSection()),
+            const SizedBox(height: 16),
+            _section('Driver', _buildDriverSection()),
             const SizedBox(height: 16),
             _section('Cargo Details', _buildCargoSection()),
             const SizedBox(height: 16),
@@ -292,6 +341,109 @@ class _BookingScreenState extends State<BookingScreen> {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildDriverSection() {
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Selected driver chip
+        if (_selectedDriver != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.green.shade300),
+            ),
+            child: Row(children: [
+              Icon(Icons.person, size: 18, color: Colors.green.shade700),
+              const SizedBox(width: 8),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_selectedDriver!['name'], style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade800, fontSize: 13)),
+                if (_selectedDriver!['phone'] != null)
+                  Text(_selectedDriver!['phone'], style: TextStyle(fontSize: 11, color: Colors.green.shade600)),
+              ])),
+              GestureDetector(
+                onTap: () => setState(() { _selectedDriver = null; _driverSearchCtrl.clear(); _filteredDrivers = _drivers; }),
+                child: Icon(Icons.close, size: 18, color: Colors.grey.shade500),
+              ),
+            ]),
+          ),
+
+        // Search field
+        TextField(
+          controller: _driverSearchCtrl,
+          onTap: () => setState(() => _showDriverDropdown = true),
+          decoration: InputDecoration(
+            labelText: _selectedDriver == null ? 'Search Driver (optional)' : 'Search another driver',
+            hintText: 'Type driver name or phone...',
+            prefixIcon: const Icon(Icons.search, size: 20),
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            border: border,
+            enabledBorder: border,
+            suffixIcon: _driverSearchCtrl.text.isNotEmpty
+                ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () {
+                    _driverSearchCtrl.clear();
+                    setState(() => _filteredDrivers = _drivers);
+                  })
+                : null,
+          ),
+        ),
+
+        // Dropdown list
+        if (_showDriverDropdown && _driverSearchCtrl.text.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: _filteredDrivers.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No drivers found', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _filteredDrivers.length,
+                    separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100),
+                    itemBuilder: (context, i) {
+                      final d = _filteredDrivers[i];
+                      return ListTile(
+                        dense: true,
+                        leading: CircleAvatar(radius: 16, backgroundColor: Colors.blue.shade100,
+                          child: Text(d['name'][0].toUpperCase(), style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.bold))),
+                        title: Text(d['name'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                        subtitle: d['phone'] != null ? Text(d['phone'], style: const TextStyle(fontSize: 11)) : null,
+                        onTap: () {
+                          setState(() {
+                            _selectedDriver = d;
+                            _showDriverDropdown = false;
+                            _driverSearchCtrl.clear();
+                            _filteredDrivers = _drivers;
+                          });
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+
+        if (_selectedDriver == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Optional — admin can also assign a driver later.',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          ),
       ],
     );
   }
